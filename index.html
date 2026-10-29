@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Rajesh's Streak Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a training log with three views. Today = check-in + streak;
+   Plan = the dated problem schedule by week and day; Topics = progress by pattern. */
+:root{
+  --paper:#eef1f6; --surface:#ffffff; --ink:#15202f; --muted:#5a6678; --line:#d9dfe8;
+  --accent:#2445c4; --streak:#c97c06; --warn:#b4461f; --good:#1f8a5b;
+  --easy:#1f8a5b; --med:#b0700a; --hard:#c0392b;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#0e131b; --surface:#151c27; --ink:#e5eaf2; --muted:#93a0b3; --line:#253043;
+  --accent:#7d95ff; --streak:#f0b340; --warn:#f08a5d; --good:#4cc48c;
+  --easy:#4cc48c; --med:#f0b340; --hard:#f07a6a; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --paper:#0e131b; --surface:#151c27; --ink:#e5eaf2; --muted:#93a0b3; --line:#253043;
+  --accent:#7d95ff; --streak:#f0b340; --warn:#f08a5d; --good:#4cc48c;
+  --easy:#4cc48c; --med:#f0b340; --hard:#f07a6a; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+a{color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding-block:24px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-0.01em}
+h1{font-size:clamp(26px,4vw,34px);line-height:1.1}
+h2{font-size:18px}
+h3{font-size:15.5px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.phase{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;
+  border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px}
+.phase i{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+nav.tabs a{font-weight:600;font-size:14.5px;color:var(--muted);text-decoration:none;padding:8px 14px;border-bottom:2px solid transparent;margin-bottom:-1px}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav.tabs .badge{font-family:var(--mono);font-size:11px;background:var(--streak);color:var(--surface);border-radius:999px;padding:1px 6px;margin-left:6px}
+.view{display:flex;flex-direction:column;gap:20px}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat b{font-family:var(--display);font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat.streak b{color:var(--streak)}
+.stat small{color:var(--muted);font-size:13px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.banner{border-radius:10px;padding:12px 16px;font-size:14.5px;border:1px solid var(--line);background:var(--surface);
+  border-left:4px solid var(--accent)}
+.banner.warn{border-left-color:var(--warn)}
+.banner.good{border-left-color:var(--good)}
+
+.grid{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+
+/* form */
+.field{display:flex;flex-direction:column;gap:6px}
+.field > span{font-size:13px;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{position:relative}
+.chips input{position:absolute;opacity:0;pointer-events:none}
+.chips span{display:inline-block;font-family:var(--mono);font-size:13px;padding:5px 10px;border-radius:8px;
+  border:1px solid var(--line);cursor:pointer;user-select:none}
+.chips input:checked + span{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.chips input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
+.steppers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content}
+.stepper button{width:34px;height:34px;border:0;background:transparent;color:var(--ink);font-size:18px;cursor:pointer}
+.stepper button:hover{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+.stepper input{width:44px;height:34px;border:0;border-left:1px solid var(--line);border-right:1px solid var(--line);
+  text-align:center;background:transparent;color:var(--ink);font-family:var(--mono);font-size:15px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.checks label{display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer}
+.checks input{margin-top:3px;accent-color:var(--accent)}
+input[type=text]{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:transparent;
+  color:var(--ink);font:inherit;font-size:14px}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--surface);font:inherit;font-weight:600;
+  padding:8px 16px;border-radius:8px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+#saveMsg{font-size:13px;color:var(--muted)}
+.prev-next{font-family:var(--mono);font-size:13px;display:flex;gap:6px;align-items:center}
+.prev-next button{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;min-width:28px;height:28px;cursor:pointer;font:inherit}
+.prev-next button:disabled{opacity:.35;cursor:default}
+.upnext{border:1px dashed var(--line);border-radius:8px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:4px}
+.upnext a{font-weight:600}
+
+/* calendar */
+.cal-scroll{overflow-x:auto;padding-bottom:4px}
+.cal{display:grid;grid-auto-flow:column;grid-template-rows:16px repeat(7,13px);gap:3px;width:max-content}
+.cal .m{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;grid-row:1}
+.cal .d{width:13px;height:13px;border-radius:3px;border:0;padding:0;background:var(--h0);cursor:pointer}
+.cal .d[disabled]{cursor:default}
+.cal .d.future{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.cal .d.out{visibility:hidden}
+.cal .d.mark{box-shadow:inset 0 0 0 2px var(--streak)}
+.cal .d.sel{box-shadow:0 0 0 2px var(--ink)}
+.cal .d.today{box-shadow:0 0 0 2px var(--accent)}
+:root{--h0:color-mix(in srgb, var(--line) 70%, var(--surface));
+  --h1:color-mix(in srgb, var(--accent) 28%, var(--surface));
+  --h2:color-mix(in srgb, var(--accent) 50%, var(--surface));
+  --h3:color-mix(in srgb, var(--accent) 75%, var(--surface));
+  --h4:var(--accent)}
+.lv1{background:var(--h1)!important}.lv2{background:var(--h2)!important}.lv3{background:var(--h3)!important}.lv4{background:var(--h4)!important}
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted)}
+.legend .sw{display:inline-flex;gap:3px;align-items:center}
+.legend .sw i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.week{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border-top:1px solid var(--line);padding-top:12px}
+.week div{display:flex;flex-direction:column}
+.week b{font-family:var(--mono);font-size:18px;font-variant-numeric:tabular-nums}
+.week small{color:var(--muted);font-size:12.5px}
+
+.chart svg{width:100%;height:auto;display:block}
+.chart text{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+.wins{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.wins li{display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.wins li:last-child{border-bottom:0}
+.wins .mono{color:var(--muted);font-size:12.5px;padding-top:2px}
+.empty{color:var(--muted);font-size:14px}
+
+/* problem rows */
+.plist{display:flex;flex-direction:column}
+.prow{display:grid;grid-template-columns:132px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.plist .prow:first-child{border-top:0}
+.prow select{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:4px 6px;background:var(--surface);color:var(--ink);width:100%}
+.prow select.s-stuck{border-color:var(--warn);color:var(--warn)}
+.prow select.s-solved{border-color:var(--good);color:var(--good)}
+.prow select.s-mastered{background:var(--good);border-color:var(--good);color:var(--surface)}
+.ptitle{min-width:0;display:flex;flex-direction:column;gap:2px}
+.ptitle a{font-weight:600;text-decoration:none;color:var(--ink)}
+.ptitle a:hover{text-decoration:underline;color:var(--accent)}
+.pmeta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);align-items:center}
+.pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid currentColor;font-weight:500}
+.pill.E{color:var(--easy)}.pill.M{color:var(--med)}.pill.H{color:var(--hard)}
+.tag{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.pside{display:flex;gap:10px;align-items:center;font-size:12.5px;white-space:nowrap}
+.pside a{color:var(--muted)}
+.due{color:var(--streak);font-weight:600}
+.cards2 .prow{grid-template-columns:minmax(0,1fr) auto}.cards2 .prow select{grid-column:1/-1;width:auto;justify-self:start}
+@media (max-width:560px){.prow{grid-template-columns:minmax(0,1fr) auto}.prow select{grid-column:1/-1;width:auto;justify-self:start}}
+
+.daygrid{display:flex;flex-direction:column;gap:12px}
+.day{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface)}
+.day.is-today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.day-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.day-head b{font-family:var(--mono);font-size:13px}
+.day-head span{font-size:13px;color:var(--muted)}
+.day .note{font-size:13.5px;color:var(--muted);margin-top:4px}
+.weekbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.weekbar h2 small{font-family:var(--body);font-weight:400;font-size:14px;color:var(--muted);display:block}
+.cards2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+@media (max-width:860px){.cards2{grid-template-columns:minmax(0,1fr)}}
+
+.topics{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.tcard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface);display:flex;flex-direction:column;gap:8px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.tcard:hover{border-color:var(--accent)}
+.tcard .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.tcard b{font-size:14.5px}
+.tcard small{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.bar{height:6px;border-radius:3px;background:var(--h0);overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.bar .b1{background:var(--good)}.bar .b2{background:color-mix(in srgb, var(--good) 45%, var(--surface))}
+details.tsec{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 18px}
+details.tsec summary{cursor:pointer;padding:14px 0;display:flex;justify-content:space-between;gap:10px;align-items:baseline;list-style:none}
+details.tsec summary::-webkit-details-marker{display:none}
+details.tsec summary::before{content:"▸";color:var(--muted);margin-right:8px}
+details.tsec[open] summary::before{content:"▾"}
+details.tsec summary h3{flex:1}
+details.tsec .plist{padding-bottom:12px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.tq{font-size:14.5px;font-weight:500}
+.lvl{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.prow select.t-shaky{border-color:var(--warn);color:var(--warn)}
+.prow select.t-explain{border-color:var(--accent);color:var(--accent)}
+.prow select.t-confident{background:var(--good);border-color:var(--good);color:var(--surface)}
+.tinfo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding-bottom:12px}
+@media (max-width:700px){.tinfo{grid-template-columns:minmax(0,1fr)}}
+.tinfo > div{border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:6px}
+.tinfo b{font-size:12px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tinfo label{display:flex;gap:8px;align-items:center;font-weight:600;cursor:pointer}
+.tinfo input{accent-color:var(--good)}
+.method{font-size:14px}
+.method ol{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+.tt-day{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.tt-day.is-today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tt-day.past{opacity:.72}
+.tt-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.tt-head b{font-family:var(--display);font-size:16px}
+.tt-head span{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.tt-blocks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tt-blocks.one{grid-template-columns:minmax(0,1fr)}
+.tt-blocks.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:860px){.tt-blocks,.tt-blocks.two{grid-template-columns:minmax(0,1fr)}}
+.blk{border:1px solid var(--line);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:4px;min-width:0;font-size:13.5px}
+.blk.main{border-color:color-mix(in srgb, var(--accent) 45%, var(--line));background:color-mix(in srgb, var(--accent) 5%, var(--surface))}
+.blk .bt{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+.blk a.pt{font-weight:600;text-decoration:none;color:var(--ink)}
+.blk a.pt:hover{color:var(--accent);text-decoration:underline}
+.blk select{font:inherit;font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:var(--surface);color:var(--ink);max-width:100%;align-self:flex-start}
+.blk select.s-stuck,.blk select.t-shaky{border-color:var(--warn);color:var(--warn)}
+.blk select.s-solved,.blk select.t-explain{border-color:var(--good);color:var(--good)}
+.blk select.s-mastered,.blk select.t-confident{background:var(--good);border-color:var(--good);color:var(--surface)}
+.blk .sub{color:var(--muted);font-size:12.5px}
+.goals{display:flex;flex-direction:column;gap:4px;margin:0;padding-left:18px;font-size:14px}
+.wk-sum{display:flex;gap:16px;flex-wrap:wrap;font-size:13.5px;color:var(--muted)}
+.wk-sum b{color:var(--ink);font-family:var(--mono)}
+.subhead{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 0 2px;border-top:1px solid var(--line)}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:4px 12px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+footer,.src{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.cal .d{transition:background .2s}}
+</style>
+</head>
+<body>
+<script>
+/* Standalone storage: replaces the claude.ai database with this browser's localStorage.
+   Same small interface the board uses: collection(name).doc(id).set(obj) and collection(name).onSnapshot(fn). */
+(function(){
+  const PREFIX='streakboard:';
+  const COLS=['days','problems','tech'];
+  let ok=true; try{localStorage.setItem(PREFIX+'probe','1');localStorage.removeItem(PREFIX+'probe')}catch(e){ok=false}
+  const mem={};
+  function load(c){ if(!ok) return mem[c]||(mem[c]={}); try{return JSON.parse(localStorage.getItem(PREFIX+c)||'{}')}catch(e){return {}} }
+  function save(c,o){ if(!ok){mem[c]=o;return} localStorage.setItem(PREFIX+c,JSON.stringify(o)) }
+  const listeners={};
+  function snap(c){ const o=load(c); return {docs:Object.keys(o).map(id=>({id,exists:true,data:()=>o[id]}))} }
+  function emit(c){ (listeners[c]||[]).forEach(fn=>{try{fn(snap(c))}catch(e){console.error(e)}}) }
+  const db={collection:c=>({
+    doc:id=>({ set:async v=>{ const o=load(c); o[id]=JSON.parse(JSON.stringify(v)); try{save(c,o)}catch(e){throw {code:'quota_exceeded',message:String(e)}} emit(c) } }),
+    onSnapshot:(fn)=>{ (listeners[c]=listeners[c]||[]).push(fn); setTimeout(()=>fn(snap(c)),0); return ()=>{listeners[c]=listeners[c].filter(f=>f!==fn)} }
+  })};
+  window.addEventListener('storage',e=>{ if(e.key&&e.key.startsWith(PREFIX)) emit(e.key.slice(PREFIX.length)) });
+  window.claude={use:async n=>n==='db'?db:null};
+
+  // Backup controls in the footer
+  document.addEventListener('DOMContentLoaded',()=>{
+    const f=document.querySelector('footer'); if(!f) return;
+    const box=document.createElement('div');
+    box.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px';
+    box.innerHTML='<button type="button" class="btn ghost sm" id="expBtn">Export backup</button>'+
+      '<label class="btn ghost sm" style="cursor:pointer">Import backup<input type="file" id="impFile" accept="application/json,.json" hidden></label>'+
+      '<span id="bkMsg"></span>';
+    f.after(box);
+    const msg=t=>{document.getElementById('bkMsg').textContent=t};
+    if(!ok) msg('This browser is blocking storage, so progress lasts only until you close the tab.');
+    else msg('Your progress is saved in this browser only. Export a backup weekly.');
+    document.getElementById('expBtn').onclick=()=>{
+      const data={app:'streak-board',version:1,exportedAt:new Date().toISOString()}; COLS.forEach(c=>data[c]=load(c));
+      const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='streak-board-backup-'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),1000); msg('Backup downloaded.');
+    };
+    document.getElementById('impFile').onchange=e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const r=new FileReader(); r.onload=()=>{
+        try{ const d=JSON.parse(r.result); if(d.app!=='streak-board') throw new Error('not a backup');
+          COLS.forEach(c=>{ if(d[c]&&typeof d[c]==='object'){save(c,d[c]);emit(c)} }); msg('Backup restored from '+(d.exportedAt||'file').slice(0,10)+'.');
+        }catch(err){ msg('That file isn’t a Streak Board backup. Choose a file you exported from this page.') }
+        e.target.value='';
+      }; r.readAsText(file);
+    };
+  });
+})();
+</script>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">10-month offer plan</div>
+      <h1>Rajesh's Streak Board</h1>
+    </div>
+    <div class="phase"><i></i><span id="phase">Loading…</span></div>
+  </header>
+
+  <nav class="tabs" aria-label="Views">
+    <a href="#week" data-view="week">Week</a>
+    <a href="#today" data-view="today">Today</a>
+    <a href="#plan" data-view="plan">Plan<span class="badge" id="dueBadge" hidden>0</span></a>
+    <a href="#topics" data-view="topics">Topics</a>
+    <a href="#tech" data-view="tech">Tech</a>
+  </nav>
+
+  <!-- WEEK TIMETABLE -->
+  <section class="view" id="v-week" hidden>
+    <section class="panel">
+      <div class="weekbar">
+        <h2 id="ttTitle">This week</h2>
+        <div class="prev-next">
+          <button type="button" id="ttPrev" aria-label="Previous week">‹</button>
+          <button type="button" id="ttNow">This week</button>
+          <button type="button" id="ttNext" aria-label="Next week">›</button>
+        </div>
+      </div>
+      <div class="wk-sum" id="ttSum"></div>
+      <ul class="goals" id="ttGoals"></ul>
+      <div class="actions"><a class="btn" href="#today" style="text-decoration:none">Log today's session</a><span class="muted" style="font-size:13px">Do the blocks top to bottom, then log it.</span></div>
+    </section>
+    <div id="ttDays" style="display:flex;flex-direction:column;gap:12px"></div>
+  </section>
+
+  <!-- TODAY -->
+  <section class="view" id="v-today" hidden>
+    <section class="stats" aria-label="Summary">
+      <div class="stat streak"><span class="eyebrow">Current streak</span><b id="sStreak">0</b><small id="sBest">Best 0 days</small></div>
+      <div class="stat"><span class="eyebrow">Problems attempted</span><b id="sProblems">0</b><small id="sTarget">Plan —</small></div>
+      <div class="stat"><span class="eyebrow">Hours logged</span><b id="sHours">0</b><small id="sDays">0 days shown up</small></div>
+      <div class="stat"><span class="eyebrow">Countdown</span><b id="sCount">—</b><small id="sCountLbl">days</small></div>
+    </section>
+
+    <div class="banner" id="banner">Connecting to your log…</div>
+
+    <div class="grid">
+      <form class="panel" id="form" autocomplete="off">
+        <div class="panel-head">
+          <h2 id="formTitle">Today</h2>
+          <div class="prev-next">
+            <button type="button" id="prevDay" aria-label="Previous day">‹</button>
+            <span id="formDate">—</span>
+            <button type="button" id="nextDay" aria-label="Next day">›</button>
+          </div>
+        </div>
+
+        <div class="upnext" id="upnext"></div>
+
+        <div class="field"><span>Minutes practised</span>
+          <div class="chips" id="minChips" role="radiogroup" aria-label="Minutes practised"></div>
+        </div>
+
+        <div class="steppers">
+          <div class="field"><span>New problems</span>
+            <div class="stepper"><button type="button" data-step="problems" data-d="-1" aria-label="Fewer problems">−</button><input id="problems" inputmode="numeric" value="0" aria-label="New problems"><button type="button" data-step="problems" data-d="1" aria-label="More problems">+</button></div>
+          </div>
+          <div class="field"><span>Revisits from blank</span>
+            <div class="stepper"><button type="button" data-step="revisits" data-d="-1" aria-label="Fewer revisits">−</button><input id="revisits" inputmode="numeric" value="0" aria-label="Revisits"><button type="button" data-step="revisits" data-d="1" aria-label="More revisits">+</button></div>
+          </div>
+        </div>
+
+        <div class="field"><span>Anti-blank habits</span>
+          <div class="checks">
+            <label><input type="checkbox" id="solo"> 25-min solo, no tutorial</label>
+            <label><input type="checkbox" id="aloud"> Explained it aloud</label>
+            <label><input type="checkbox" id="paper"> Paper dry run</label>
+            <label><input type="checkbox" id="side"> STAR / design / project</label>
+            <label><input type="checkbox" id="build"> Project build</label>
+            <label><input type="checkbox" id="logged"> Problem log updated</label>
+          </div>
+        </div>
+
+        <label class="field" for="win"><span>Today's win</span>
+          <input type="text" id="win" maxlength="160" placeholder="Solved a medium without hints">
+        </label>
+        <label class="field" for="next"><span>First thing next session</span>
+          <input type="text" id="next" maxlength="160" placeholder="Re-solve Valid Anagram from blank">
+        </label>
+
+        <div class="actions">
+          <button class="btn" type="submit" id="saveBtn">Save day</button>
+          <button class="btn ghost" type="button" id="minBtn">Log a 10-minute day</button>
+          <span id="saveMsg" role="status"></span>
+        </div>
+      </form>
+
+      <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <section class="panel" aria-label="Streak calendar">
+          <div class="panel-head"><h2>Every day you showed up</h2><span class="muted" style="font-size:13px">Tap a day to edit it</span></div>
+          <div class="cal-scroll"><div class="cal" id="cal"></div></div>
+          <div class="legend">
+            <span class="sw"><i style="background:var(--h0)"></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i></span>
+            <span>0 · 10 · 30 · 60 · 90+ min</span>
+            <span class="sw"><i style="box-shadow:inset 0 0 0 2px var(--streak)"></i></span><span>Milestone date</span>
+          </div>
+          <div class="week">
+            <div><b id="wDays">0/7</b><small>Days this week</small></div>
+            <div><b id="wMin">0</b><small>Minutes this week</small></div>
+            <div><b id="wProb">0</b><small>Problems this week</small></div>
+          </div>
+        </section>
+
+        <section class="panel chart" aria-label="Problem burn-up">
+          <div class="panel-head"><h2>Problems vs plan</h2><span class="muted mono" style="font-size:12.5px" id="paceTxt"></span></div>
+          <svg id="chart" viewBox="0 0 640 230" role="img" aria-label="Cumulative problems attempted against the scheduled plan"></svg>
+        </section>
+
+        <section class="panel" aria-label="Wins log">
+          <h2>Wins log</h2>
+          <ul class="wins" id="wins"></ul>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAN -->
+  <section class="view" id="v-plan" hidden>
+    <div class="cards2">
+      <section class="panel" aria-label="On the plan today">
+        <div class="panel-head"><h2>On the plan today</h2><span class="muted mono" style="font-size:12.5px" id="todayLbl"></span></div>
+        <div class="plist" id="todayList"></div>
+      </section>
+      <section class="panel" aria-label="Revisits due">
+        <div class="panel-head"><h2>Revisits due</h2><span class="muted" style="font-size:12.5px">Day 3 · 7 · 21 after solving</span></div>
+        <div class="plist" id="dueList"></div>
+      </section>
+      <section class="panel" aria-label="Retry from blank">
+        <div class="panel-head"><h2>Retry from blank</h2><span class="muted" style="font-size:12.5px">You got stuck on these</span></div>
+        <div class="plist" id="stuckList"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="weekbar">
+        <h2 id="wkTitle">Week</h2>
+        <div class="prev-next">
+          <button type="button" id="wkPrev" aria-label="Previous week">‹</button>
+          <button type="button" id="wkNow">This week</button>
+          <button type="button" id="wkNext" aria-label="Next week">›</button>
+        </div>
+      </div>
+      <div class="daygrid" id="wkDays"></div>
+    </section>
+    <p class="src">Rows open the problem on LeetCode. Use <b>Editorial</b> only after 25 minutes solo, one hint at a time. If you miss a day, don't catch up: move on, and old ones come back as bonus practice.</p>
+  </section>
+
+  <!-- TOPICS -->
+  <section class="view" id="v-topics" hidden>
+    <div class="topics" id="topicCards"></div>
+    <div class="filters" role="group" aria-label="Filter problems">
+      <button type="button" data-f="all" aria-pressed="true">All</button>
+      <button type="button" data-f="todo" aria-pressed="false">To do</button>
+      <button type="button" data-f="done" aria-pressed="false">Solved</button>
+      <button type="button" data-f="hot" aria-pressed="false">Asked at 10+ product companies</button>
+      <button type="button" data-f="svc" aria-pressed="false">Asked at service MNCs</button>
+    </div>
+    <div id="topicSecs" style="display:flex;flex-direction:column;gap:10px"></div>
+    <p class="src">Company tags: how often each problem appears in LeetCode's company-tagged interview data for 30 companies hiring in India (Amazon, Microsoft, Google, Flipkart, Swiggy, PhonePe, Zomato, Razorpay, Atlassian, Uber, Walmart, Salesforce, Adobe, Oracle, Intuit, Goldman Sachs, Zoho, Paytm, Meesho, CRED, Myntra, Media.net, Visa, ServiceNow, LinkedIn, Sprinklr, DE Shaw, Nutanix, Cisco, Freshworks), weighted to the last six months. Outlined tags show 25 service-based companies (TCS, Infosys, Wipro, Accenture, Cognizant, Capgemini, HCL, Tech Mahindra, LTIMindtree, Deloitte, IBM, EY, PwC, DXC, Genpact, Virtusa, Coforge, Nagarro, EPAM, Publicis Sapient, ThoughtWorks, Persistent, Altimetrik, Amdocs). Data from <a href="https://github.com/liquidslr/leetcode-company-wise-problems" target="_blank" rel="noopener">liquidslr/leetcode-company-wise-problems</a>; core set based on NeetCode 150, premium-only problems swapped for free ones.</p>
+  </section>
+
+  <!-- TECH -->
+  <section class="view" id="v-tech" hidden>
+    <div class="grid2">
+      <section class="panel" aria-label="This month's focus">
+        <div class="panel-head"><h2 id="tfTitle">This month's focus</h2><span class="muted mono" style="font-size:12.5px" id="tfSum"></span></div>
+        <div class="plist" id="tfList"></div>
+      </section>
+      <section class="panel method" aria-label="How to practise">
+        <h2>How to practise a question</h2>
+        <ol>
+          <li>Read the question. Close the docs.</li>
+          <li>Answer out loud in under 60 seconds, with one example from your own work or project.</li>
+          <li>Check the docs link. Fix what you got wrong, then say it again.</li>
+          <li>Mark <b>Can explain</b> when you get it right with notes, <b>Confident</b> only when you can do it cold.</li>
+        </ol>
+        <p class="muted" style="margin:0;font-size:13px">One or two questions in the 10-minute side-skill slot each weekday. Marking one also ticks "STAR / design / project" on today's log.</p>
+      </section>
+    </div>
+    <div class="topics" id="techCards"></div>
+    <div class="filters" role="group" aria-label="Filter questions" id="techFilt">
+      <button type="button" data-tf="all" aria-pressed="true">All</button>
+      <button type="button" data-tf="todo" aria-pressed="false">Not yet</button>
+      <button type="button" data-tf="shaky" aria-pressed="false">Shaky</button>
+      <button type="button" data-tf="core" aria-pressed="false">Core only</button>
+    </div>
+    <div id="techSecs" style="display:flex;flex-direction:column;gap:10px"></div>
+    <p class="src">Questions collected from frequently asked .NET interview lists (ASP.NET Core Web API, EF Core, LINQ, microservices, ADO.NET, SQL Server, C#, Angular) and rewritten for a 2–3 year full-stack .NET role. <b>Core</b> = asked almost everywhere at your level; <b>Deeper</b> = common follow-ups at product companies. Doc links go to Microsoft Learn, angular.dev and react.dev.</p>
+  </section>
+
+  <footer>Rule: never zero, never miss twice. A 10-minute day keeps the streak alive.</footer>
+</div>
+
+<script type="application/json" id="pdata">[{"id":"two-sum","t":"Two Sum","d":"E","topic":"Warm-up","co":["Google","Microsoft","Amazon","Oracle"],"n":20,"wk":1,"date":"2026-10-30","role":"warm","bonus":false,"s":["TCS","Infosys","Wipro"],"sn":18},{"id":"contains-duplicate","t":"Contains Duplicate","d":"E","topic":"Warm-up","co":["Google","Amazon","Microsoft","Zoho"],"n":5,"wk":1,"date":"2026-11-01","role":"warm","bonus":false,"s":["Capgemini","TCS","Accenture"],"sn":5},{"id":"merge-sorted-array","t":"Merge Sorted Array","d":"E","topic":"Warm-up","co":["Google","Amazon","Microsoft","Zoho"],"n":10,"wk":1,"date":"2026-11-02","role":"warm","bonus":false,"s":["EPAM","TCS","HCL"],"sn":9},{"id":"move-zeroes","t":"Move Zeroes","d":"E","topic":"Warm-up","co":["Amazon","Microsoft","Google","Zoho"],"n":12,"wk":1,"date":"2026-11-03","role":"warm","bonus":false,"s":["Cognizant","LTIMindtree","EPAM"],"sn":8},{"id":"best-time-to-buy-and-sell-stock","t":"Best Time to Buy and Sell Stock","d":"E","topic":"Warm-up","co":["Atlassian","Zoho","Amazon","Adobe"],"n":19,"wk":1,"date":"2026-11-04","role":"warm","bonus":false,"s":["Wipro","Accenture","HCL"],"sn":11},{"id":"valid-anagram","t":"Valid Anagram","d":"E","topic":"Warm-up","co":["Zoho","Amazon","Google","Microsoft"],"n":10,"wk":2,"date":"2026-11-06","role":"warm","bonus":false,"s":["TCS","IBM","Wipro"],"sn":10},{"id":"majority-element","t":"Majority Element","d":"E","topic":"Warm-up","co":["Amazon","Google","Microsoft","Adobe"],"n":7,"wk":2,"date":"2026-11-08","role":"warm","bonus":false,"s":["Accenture","TCS","Infosys"],"sn":5},{"id":"valid-palindrome","t":"Valid Palindrome","d":"E","topic":"Warm-up","co":["Amazon","Google","Microsoft","Walmart"],"n":13,"wk":2,"date":"2026-11-09","role":"warm","bonus":false,"s":["Altimetrik","LTIMindtree","HCL"],"sn":9},{"id":"is-subsequence","t":"Is Subsequence","d":"E","topic":"Warm-up","co":["Amazon","Google","Adobe","Zoho"],"n":5,"wk":2,"date":"2026-11-10","role":"warm","bonus":false,"s":["Infosys"],"sn":1},{"id":"isomorphic-strings","t":"Isomorphic Strings","d":"E","topic":"Warm-up","co":["Amazon","Google","Microsoft","Sprinklr"],"n":8,"wk":2,"date":"2026-11-11","role":"warm","bonus":false,"s":["Accenture","TCS"],"sn":2},{"id":"longest-common-prefix","t":"Longest Common Prefix","d":"E","topic":"Warm-up","co":["Google","Microsoft","Amazon","Adobe"],"n":10,"wk":3,"date":"2026-11-13","role":"warm","bonus":false,"s":["Wipro","PwC","Persistent"],"sn":12},{"id":"remove-duplicates-from-sorted-array","t":"Remove Duplicates from Sorted Array","d":"E","topic":"Warm-up","co":["Microsoft","Google","Amazon","Myntra"],"n":9,"wk":3,"date":"2026-11-15","role":"warm","bonus":false,"s":["TCS","Capgemini","Accenture"],"sn":7},{"id":"roman-to-integer","t":"Roman to Integer","d":"E","topic":"Warm-up","co":["Microsoft","Google","Amazon","Zoho"],"n":10,"wk":3,"date":"2026-11-16","role":"warm","bonus":false,"s":["TCS","IBM","Virtusa"],"sn":9},{"id":"intersection-of-two-arrays-ii","t":"Intersection of Two Arrays II","d":"E","topic":"Warm-up","co":["Amazon","Google","Microsoft"],"n":3,"wk":3,"date":"2026-11-17","role":"warm","bonus":false,"s":["IBM","TCS"],"sn":2},{"id":"group-anagrams","t":"Group Anagrams","d":"M","topic":"Warm-up","co":["Amazon","Oracle","Walmart","Visa"],"n":17,"wk":3,"date":"2026-11-18","role":"warm","bonus":false,"s":["Wipro","Deloitte","EPAM"],"sn":9},{"id":"plus-one","t":"Plus One","d":"E","topic":"Warm-up","co":["Google","Microsoft","Amazon","Intuit"],"n":6,"wk":4,"date":"2026-11-20","role":"warm","bonus":false,"s":["Capgemini","TCS"],"sn":2},{"id":"missing-number","t":"Missing Number","d":"E","topic":"Warm-up","co":["Google","Amazon","Microsoft","Zoho"],"n":6,"wk":4,"date":"2026-11-22","role":"warm","bonus":false,"s":["HCL","TCS","Infosys"],"sn":4},{"id":"single-number","t":"Single Number","d":"E","topic":"Warm-up","co":["Microsoft","Amazon","Google","Adobe"],"n":6,"wk":4,"date":"2026-11-24","role":"warm","bonus":false,"s":["Amdocs","TCS","Cognizant"],"sn":5},{"id":"top-k-frequent-elements","t":"Top K Frequent Elements","d":"M","topic":"Warm-up","co":["Walmart","Amazon","Microsoft","Google"],"n":14,"wk":4,"date":"2026-11-26","role":"warm","bonus":false,"s":["EPAM","Infosys","TCS"],"sn":3},{"id":"product-of-array-except-self","t":"Product of Array Except Self","d":"M","topic":"Warm-up","co":["Amazon","Microsoft","Google","Freshworks"],"n":14,"wk":4,"date":"2026-11-29","role":"warm","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"find-the-index-of-the-first-occurrence-in-a-string","t":"Find the Index of the First Occurrence in a String","d":"E","topic":"Arrays and hashing","co":["Microsoft","Google","Amazon","Zoho"],"n":4,"wk":5,"date":"2026-12-01","role":"new","bonus":false,"s":["Cognizant","TCS","Capgemini"],"sn":4},{"id":"subarray-sum-equals-k","t":"Subarray Sum Equals K","d":"M","topic":"Arrays and hashing","co":["Visa","Microsoft","Amazon","Google"],"n":15,"wk":5,"date":"2026-12-02","role":"new","bonus":false,"s":["Accenture","Infosys","IBM"],"sn":8},{"id":"longest-consecutive-sequence","t":"Longest Consecutive Sequence","d":"M","topic":"Arrays and hashing","co":["Google","Amazon","Microsoft","Paytm"],"n":19,"wk":5,"date":"2026-12-03","role":"new","bonus":false,"s":["TCS","EPAM","IBM"],"sn":6},{"id":"sort-colors","t":"Sort Colors","d":"M","topic":"Arrays and hashing","co":["Walmart","Amazon","Microsoft","Google"],"n":14,"wk":5,"date":"2026-12-04","role":"new","bonus":false,"s":["TCS","Nagarro","Capgemini"],"sn":5},{"id":"next-permutation","t":"Next Permutation","d":"M","topic":"Arrays and hashing","co":["Microsoft","Amazon","Google","Adobe"],"n":13,"wk":5,"date":"2026-12-06","role":"timed","bonus":false,"s":["Accenture","PwC","Infosys"],"sn":7},{"id":"rotate-array","t":"Rotate Array","d":"M","topic":"Arrays and hashing","co":["Microsoft","Google","Amazon","Razorpay"],"n":8,"wk":5,"date":"2026-12-06","role":"timed","bonus":false,"s":["EPAM","Accenture","Virtusa"],"sn":8},{"id":"valid-sudoku","t":"Valid Sudoku","d":"M","topic":"Arrays and hashing","co":["Amazon","Google","Microsoft","Zoho"],"n":8,"wk":6,"date":"2026-12-07","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"majority-element-ii","t":"Majority Element II","d":"M","topic":"Arrays and hashing","co":["Amazon","Google","Microsoft"],"n":3,"wk":6,"date":"2026-12-08","role":"new","bonus":false,"s":["Accenture","Infosys","TCS"],"sn":3},{"id":"first-missing-positive","t":"First Missing Positive","d":"H","topic":"Arrays and hashing","co":["Amazon","Google","Microsoft","ServiceNow"],"n":16,"wk":6,"date":"2026-12-09","role":"new","bonus":false,"s":["TCS","EPAM","Cognizant"],"sn":4},{"id":"squares-of-a-sorted-array","t":"Squares of a Sorted Array","d":"E","topic":"Two pointers","co":["Uber","Google","Amazon","Microsoft"],"n":5,"wk":6,"date":"2026-12-10","role":"new","bonus":false,"s":["TCS","Accenture","Infosys"],"sn":3},{"id":"remove-element","t":"Remove Element","d":"E","topic":"Two pointers","co":["Google","Amazon","Microsoft","Adobe"],"n":4,"wk":6,"date":"2026-12-11","role":"new","bonus":false,"s":["TCS","IBM","Infosys"],"sn":3},{"id":"container-with-most-water","t":"Container With Most Water","d":"M","topic":"Two pointers","co":["Cisco","Amazon","Flipkart","Microsoft"],"n":16,"wk":6,"date":"2026-12-13","role":"timed","bonus":false,"s":["TCS","Accenture","Infosys"],"sn":7},{"id":"3sum","t":"3Sum","d":"M","topic":"Two pointers","co":["Amazon","Microsoft","Google","Walmart"],"n":16,"wk":6,"date":"2026-12-13","role":"timed","bonus":false,"s":["Accenture","TCS","Infosys"],"sn":7},{"id":"4sum","t":"4Sum","d":"M","topic":"Two pointers","co":["Oracle","Amazon","Google","Microsoft"],"n":8,"wk":7,"date":"2026-12-14","role":"new","bonus":false,"s":["Capgemini","Accenture","Infosys"],"sn":4},{"id":"two-sum-ii-input-array-is-sorted","t":"Two Sum II - Input Array Is Sorted","d":"M","topic":"Two pointers","co":["Amazon","Google","Microsoft","Zoho"],"n":5,"wk":7,"date":"2026-12-15","role":"new","bonus":false,"s":["TCS","EPAM","Infosys"],"sn":3},{"id":"trapping-rain-water","t":"Trapping Rain Water","d":"H","topic":"Two pointers","co":["Goldman","Amazon","Media.net","Google"],"n":21,"wk":7,"date":"2026-12-16","role":"new","bonus":false,"s":["Infosys","HCL","Publicis Sapient"],"sn":8},{"id":"longest-substring-without-repeating-characters","t":"Longest Substring Without Repeating Characters","d":"M","topic":"Sliding window","co":["Visa","Zoho","Amazon","Oracle"],"n":23,"wk":7,"date":"2026-12-17","role":"new","bonus":false,"s":["Cognizant","Deloitte","Persistent"],"sn":16},{"id":"longest-repeating-character-replacement","t":"Longest Repeating Character Replacement","d":"M","topic":"Sliding window","co":["DE Shaw","Zoho","Amazon","Microsoft"],"n":9,"wk":7,"date":"2026-12-18","role":"new","bonus":false,"s":["Publicis Sapient","Infosys"],"sn":2},{"id":"max-consecutive-ones-iii","t":"Max Consecutive Ones III","d":"M","topic":"Sliding window","co":["DE Shaw","Amazon","Goldman","Google"],"n":10,"wk":7,"date":"2026-12-20","role":"timed","bonus":false,"s":["EPAM","Infosys","IBM"],"sn":3},{"id":"fruit-into-baskets","t":"Fruit Into Baskets","d":"M","topic":"Sliding window","co":["Adobe","Amazon","Salesforce","Google"],"n":7,"wk":7,"date":"2026-12-20","role":"timed","bonus":false,"s":["TCS"],"sn":1},{"id":"permutation-in-string","t":"Permutation in String","d":"M","topic":"Sliding window","co":["Amazon","Microsoft","Google","Walmart"],"n":9,"wk":8,"date":"2026-12-21","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"minimum-size-subarray-sum","t":"Minimum Size Subarray Sum","d":"M","topic":"Sliding window","co":["Google","Amazon","Microsoft","Oracle"],"n":5,"wk":8,"date":"2026-12-22","role":"new","bonus":false,"s":["HCL","Infosys","TCS"],"sn":3},{"id":"sliding-window-maximum","t":"Sliding Window Maximum","d":"H","topic":"Sliding window","co":["Nutanix","DE Shaw","Walmart","Microsoft"],"n":17,"wk":8,"date":"2026-12-23","role":"new","bonus":false,"s":["Infosys","IBM","TCS"],"sn":3},{"id":"minimum-window-substring","t":"Minimum Window Substring","d":"H","topic":"Sliding window","co":["Amazon","Microsoft","Google","Adobe"],"n":14,"wk":8,"date":"2026-12-24","role":"new","bonus":false,"s":["IBM","Infosys"],"sn":2},{"id":"valid-parentheses","t":"Valid Parentheses","d":"E","topic":"Stack and monotonic stack","co":["Intuit","Walmart","LinkedIn","Microsoft"],"n":19,"wk":8,"date":"2026-12-25","role":"new","bonus":false,"s":["IBM","HCL","EPAM"],"sn":11},{"id":"next-greater-element-i","t":"Next Greater Element I","d":"E","topic":"Stack and monotonic stack","co":["Flipkart","Google","Amazon","Microsoft"],"n":6,"wk":8,"date":"2026-12-27","role":"timed","bonus":false,"s":["Accenture","TCS"],"sn":2},{"id":"asteroid-collision","t":"Asteroid Collision","d":"M","topic":"Stack and monotonic stack","co":["Nutanix","DE Shaw","Visa","Salesforce"],"n":17,"wk":8,"date":"2026-12-27","role":"timed","bonus":false,"s":["Infosys","Deloitte","IBM"],"sn":4},{"id":"generate-parentheses","t":"Generate Parentheses","d":"M","topic":"Stack and monotonic stack","co":["Amazon","Microsoft","Google","Walmart"],"n":14,"wk":9,"date":"2026-12-28","role":"new","bonus":false,"s":["Infosys","EPAM","IBM"],"sn":4},{"id":"decode-string","t":"Decode String","d":"M","topic":"Stack and monotonic stack","co":["Oracle","Amazon","Google","Zoho"],"n":12,"wk":9,"date":"2026-12-29","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"daily-temperatures","t":"Daily Temperatures","d":"M","topic":"Stack and monotonic stack","co":["Amazon","Goldman","Google","Microsoft"],"n":10,"wk":9,"date":"2026-12-30","role":"new","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"min-stack","t":"Min Stack","d":"M","topic":"Stack and monotonic stack","co":["Amazon","Microsoft","Google","Paytm"],"n":12,"wk":9,"date":"2026-12-31","role":"new","bonus":false,"s":["Infosys","TCS","IBM"],"sn":3},{"id":"remove-k-digits","t":"Remove K Digits","d":"M","topic":"Stack and monotonic stack","co":["Amazon","Microsoft","Google","PhonePe"],"n":8,"wk":9,"date":"2027-01-01","role":"new","bonus":false,"s":["EPAM","Deloitte","Accenture"],"sn":3},{"id":"basic-calculator-ii","t":"Basic Calculator II","d":"M","topic":"Stack and monotonic stack","co":["Microsoft","Amazon","Google","Adobe"],"n":8,"wk":9,"date":"2027-01-03","role":"timed","bonus":false,"s":[],"sn":0},{"id":"largest-rectangle-in-histogram","t":"Largest Rectangle in Histogram","d":"H","topic":"Stack and monotonic stack","co":["Amazon","Microsoft","Google","Myntra"],"n":14,"wk":9,"date":"2027-01-03","role":"timed","bonus":false,"s":["Accenture","TCS","IBM"],"sn":4},{"id":"binary-search","t":"Binary Search","d":"E","topic":"Binary search","co":["Microsoft","Amazon","Google","Oracle"],"n":4,"wk":10,"date":"2027-01-04","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"search-in-rotated-sorted-array","t":"Search in Rotated Sorted Array","d":"M","topic":"Binary search","co":["Oracle","Amazon","Google","Microsoft"],"n":17,"wk":10,"date":"2027-01-05","role":"new","bonus":false,"s":["TCS","Infosys","IBM"],"sn":3},{"id":"koko-eating-bananas","t":"Koko Eating Bananas","d":"M","topic":"Binary search","co":["Zoho","Amazon","Google","Microsoft"],"n":13,"wk":10,"date":"2027-01-06","role":"new","bonus":false,"s":["Infosys","Accenture","TCS"],"sn":4},{"id":"find-peak-element","t":"Find Peak Element","d":"M","topic":"Binary search","co":["Adobe","Google","Amazon","Microsoft"],"n":9,"wk":10,"date":"2027-01-07","role":"new","bonus":false,"s":["TCS","Infosys","Accenture"],"sn":3},{"id":"search-a-2d-matrix","t":"Search a 2D Matrix","d":"M","topic":"Binary search","co":["Microsoft","Goldman","Amazon","Google"],"n":10,"wk":10,"date":"2027-01-08","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"find-first-and-last-position-of-element-in-sorted-array","t":"Find First and Last Position of Element in Sorted Array","d":"M","topic":"Binary search","co":["Amazon","Google","Microsoft","LinkedIn"],"n":11,"wk":10,"date":"2027-01-10","role":"timed","bonus":false,"s":["Capgemini","TCS","EPAM"],"sn":5},{"id":"capacity-to-ship-packages-within-d-days","t":"Capacity To Ship Packages Within D Days","d":"M","topic":"Binary search","co":["Amazon","Microsoft","Google","Myntra"],"n":10,"wk":10,"date":"2027-01-10","role":"timed","bonus":false,"s":[],"sn":0},{"id":"find-minimum-in-rotated-sorted-array","t":"Find Minimum in Rotated Sorted Array","d":"M","topic":"Binary search","co":["Amazon","Google","Microsoft","Goldman"],"n":8,"wk":11,"date":"2027-01-11","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"median-of-two-sorted-arrays","t":"Median of Two Sorted Arrays","d":"H","topic":"Binary search","co":["Zoho","Amazon","Google","Goldman"],"n":13,"wk":11,"date":"2027-01-12","role":"new","bonus":false,"s":["Cognizant","TCS","Capgemini"],"sn":6},{"id":"merge-two-sorted-lists","t":"Merge Two Sorted Lists","d":"E","topic":"Linked list","co":["Adobe","Amazon","Google","Microsoft"],"n":11,"wk":11,"date":"2027-01-13","role":"new","bonus":false,"s":["Capgemini","TCS","EPAM"],"sn":5},{"id":"reverse-linked-list","t":"Reverse Linked List","d":"E","topic":"Linked list","co":["Google","Microsoft","Amazon","Adobe"],"n":12,"wk":11,"date":"2027-01-14","role":"new","bonus":false,"s":["TCS","Infosys","EPAM"],"sn":4},{"id":"linked-list-cycle","t":"Linked List Cycle","d":"E","topic":"Linked list","co":["Microsoft","Amazon","Google","Cisco"],"n":7,"wk":11,"date":"2027-01-15","role":"new","bonus":false,"s":["Nagarro","Infosys","Cognizant"],"sn":5},{"id":"palindrome-linked-list","t":"Palindrome Linked List","d":"E","topic":"Linked list","co":["Amazon","Google","Microsoft","Oracle"],"n":5,"wk":11,"date":"2027-01-17","role":"timed","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"lru-cache","t":"LRU Cache","d":"M","topic":"Linked list","co":["Nutanix","Cisco","Zomato","Adobe"],"n":25,"wk":11,"date":"2027-01-17","role":"timed","bonus":false,"s":["Accenture","EPAM","Infosys"],"sn":5},{"id":"add-two-numbers","t":"Add Two Numbers","d":"M","topic":"Linked list","co":["Microsoft","Amazon","Google","Adobe"],"n":10,"wk":12,"date":"2027-01-18","role":"new","bonus":false,"s":["LTIMindtree","Capgemini","EPAM"],"sn":6},{"id":"find-the-duplicate-number","t":"Find the Duplicate Number","d":"M","topic":"Linked list","co":["Amazon","Goldman","Google","Microsoft"],"n":9,"wk":12,"date":"2027-01-19","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"copy-list-with-random-pointer","t":"Copy List with Random Pointer","d":"M","topic":"Linked list","co":["Amazon","Microsoft","Google","Walmart"],"n":8,"wk":12,"date":"2027-01-20","role":"new","bonus":false,"s":[],"sn":0},{"id":"reorder-list","t":"Reorder List","d":"M","topic":"Linked list","co":["Microsoft","Amazon","Google","LinkedIn"],"n":4,"wk":12,"date":"2027-01-21","role":"new","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"merge-k-sorted-lists","t":"Merge k Sorted Lists","d":"H","topic":"Linked list","co":["Freshworks","Oracle","Amazon","Salesforce"],"n":11,"wk":12,"date":"2027-01-22","role":"new","bonus":false,"s":["Deloitte","TCS","IBM"],"sn":3},{"id":"reverse-nodes-in-k-group","t":"Reverse Nodes in k-Group","d":"H","topic":"Linked list","co":["Microsoft","Google","Amazon","Salesforce"],"n":8,"wk":12,"date":"2027-01-24","role":"timed","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"range-sum-query-immutable","t":"Range Sum Query - Immutable","d":"E","topic":"Prefix sum and intervals","co":["Amazon","Microsoft","Google"],"n":3,"wk":12,"date":"2027-01-24","role":"timed","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"merge-intervals","t":"Merge Intervals","d":"M","topic":"Prefix sum and intervals","co":["Atlassian","Visa","Walmart","Salesforce"],"n":22,"wk":13,"date":"2027-01-25","role":"new","bonus":false,"s":["IBM","Infosys","Deloitte"],"sn":7},{"id":"non-overlapping-intervals","t":"Non-overlapping Intervals","d":"M","topic":"Prefix sum and intervals","co":["Amazon","Microsoft","Google","Zoho"],"n":8,"wk":13,"date":"2027-01-26","role":"new","bonus":false,"s":["IBM","TCS"],"sn":2},{"id":"insert-interval","t":"Insert Interval","d":"M","topic":"Prefix sum and intervals","co":["Amazon","Google","PhonePe","LinkedIn"],"n":8,"wk":13,"date":"2027-01-27","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"continuous-subarray-sum","t":"Continuous Subarray Sum","d":"M","topic":"Prefix sum and intervals","co":["Amazon","Google","PhonePe","Microsoft"],"n":4,"wk":13,"date":"2027-01-28","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"minimum-number-of-arrows-to-burst-balloons","t":"Minimum Number of Arrows to Burst Balloons","d":"M","topic":"Prefix sum and intervals","co":["Google","Zoho","Microsoft","Goldman"],"n":5,"wk":13,"date":"2027-01-29","role":"new","bonus":false,"s":[],"sn":0},{"id":"my-calendar-i","t":"My Calendar I","d":"M","topic":"Prefix sum and intervals","co":["Amazon","Uber","Google","Oracle"],"n":5,"wk":13,"date":"2027-01-31","role":"timed","bonus":false,"s":[],"sn":0},{"id":"interval-list-intersections","t":"Interval List Intersections","d":"M","topic":"Prefix sum and intervals","co":["Amazon","Microsoft","Google"],"n":3,"wk":13,"date":"2027-01-31","role":"timed","bonus":false,"s":[],"sn":0},{"id":"maximum-depth-of-binary-tree","t":"Maximum Depth of Binary Tree","d":"E","topic":"Trees and BST","co":["LinkedIn","Microsoft","Google","Amazon"],"n":7,"wk":14,"date":"2027-02-01","role":"new","bonus":false,"s":["Accenture","TCS","Infosys"],"sn":3},{"id":"diameter-of-binary-tree","t":"Diameter of Binary Tree","d":"E","topic":"Trees and BST","co":["Amazon","Microsoft","Google","Nutanix"],"n":8,"wk":14,"date":"2027-02-02","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"same-tree","t":"Same Tree","d":"E","topic":"Trees and BST","co":["Amazon","Microsoft","Google","LinkedIn"],"n":5,"wk":14,"date":"2027-02-03","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"invert-binary-tree","t":"Invert Binary Tree","d":"E","topic":"Trees and BST","co":["Microsoft","Google","Amazon","LinkedIn"],"n":5,"wk":14,"date":"2027-02-04","role":"new","bonus":false,"s":[],"sn":0},{"id":"lowest-common-ancestor-of-a-binary-tree","t":"Lowest Common Ancestor of a Binary Tree","d":"M","topic":"Trees and BST","co":["Amazon","Microsoft","Google","Atlassian"],"n":10,"wk":14,"date":"2027-02-05","role":"new","bonus":false,"s":[],"sn":0},{"id":"construct-binary-tree-from-preorder-and-inorder-traversal","t":"Construct Binary Tree from Preorder and Inorder Traversal","d":"M","topic":"Trees and BST","co":["Media.net","Google","Amazon","Microsoft"],"n":6,"wk":14,"date":"2027-02-07","role":"timed","bonus":false,"s":[],"sn":0},{"id":"all-nodes-distance-k-in-binary-tree","t":"All Nodes Distance K in Binary Tree","d":"M","topic":"Trees and BST","co":["Microsoft","Amazon","Google","Sprinklr"],"n":8,"wk":14,"date":"2027-02-07","role":"timed","bonus":false,"s":[],"sn":0},{"id":"validate-binary-search-tree","t":"Validate Binary Search Tree","d":"M","topic":"Trees and BST","co":["Microsoft","Amazon","Google","Oracle"],"n":6,"wk":15,"date":"2027-02-08","role":"new","bonus":false,"s":["IBM","Infosys"],"sn":2},{"id":"binary-tree-zigzag-level-order-traversal","t":"Binary Tree Zigzag Level Order Traversal","d":"M","topic":"Trees and BST","co":["Amazon","Google","Microsoft","Nutanix"],"n":9,"wk":15,"date":"2027-02-09","role":"new","bonus":false,"s":[],"sn":0},{"id":"kth-smallest-element-in-a-bst","t":"Kth Smallest Element in a BST","d":"M","topic":"Trees and BST","co":["Uber","Microsoft","Amazon","Google"],"n":5,"wk":15,"date":"2027-02-10","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"binary-tree-level-order-traversal","t":"Binary Tree Level Order Traversal","d":"M","topic":"Trees and BST","co":["Google","Amazon","Microsoft","LinkedIn"],"n":8,"wk":15,"date":"2027-02-11","role":"new","bonus":false,"s":[],"sn":0},{"id":"binary-tree-maximum-path-sum","t":"Binary Tree Maximum Path Sum","d":"H","topic":"Trees and BST","co":["Goldman","Amazon","Microsoft","Google"],"n":10,"wk":15,"date":"2027-02-12","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"serialize-and-deserialize-binary-tree","t":"Serialize and Deserialize Binary Tree","d":"H","topic":"Trees and BST","co":["PhonePe","Microsoft","Amazon","Google"],"n":10,"wk":15,"date":"2027-02-14","role":"timed","bonus":false,"s":["TCS"],"sn":1},{"id":"last-stone-weight","t":"Last Stone Weight","d":"E","topic":"Heaps","co":["Salesforce","Google","Amazon","Visa"],"n":6,"wk":15,"date":"2027-02-14","role":"timed","bonus":false,"s":["IBM"],"sn":1},{"id":"kth-largest-element-in-a-stream","t":"Kth Largest Element in a Stream","d":"E","topic":"Heaps","co":["Microsoft","Google","Amazon","Adobe"],"n":5,"wk":16,"date":"2027-02-15","role":"new","bonus":false,"s":[],"sn":0},{"id":"kth-largest-element-in-an-array","t":"Kth Largest Element in an Array","d":"M","topic":"Heaps","co":["LinkedIn","Amazon","Google","Microsoft"],"n":15,"wk":16,"date":"2027-02-16","role":"new","bonus":false,"s":["Accenture","TCS","IBM"],"sn":5},{"id":"task-scheduler","t":"Task Scheduler","d":"M","topic":"Heaps","co":["Amazon","Microsoft","Google","Nutanix"],"n":9,"wk":16,"date":"2027-02-17","role":"new","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"top-k-frequent-words","t":"Top K Frequent Words","d":"M","topic":"Heaps","co":["Amazon","Google","Adobe","Uber"],"n":8,"wk":16,"date":"2027-02-18","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"k-closest-points-to-origin","t":"K Closest Points to Origin","d":"M","topic":"Heaps","co":["Amazon","Swiggy","Salesforce","Google"],"n":8,"wk":16,"date":"2027-02-19","role":"new","bonus":false,"s":[],"sn":0},{"id":"find-median-from-data-stream","t":"Find Median from Data Stream","d":"H","topic":"Heaps","co":["Adobe","DE Shaw","Intuit","Amazon"],"n":14,"wk":16,"date":"2027-02-21","role":"timed","bonus":false,"s":[],"sn":0},{"id":"letter-combinations-of-a-phone-number","t":"Letter Combinations of a Phone Number","d":"M","topic":"Backtracking","co":["LinkedIn","Microsoft","Uber","Amazon"],"n":14,"wk":16,"date":"2027-02-21","role":"timed","bonus":false,"s":["Accenture","Infosys","TCS"],"sn":4},{"id":"word-search","t":"Word Search","d":"M","topic":"Backtracking","co":["Uber","Amazon","Microsoft","Google"],"n":12,"wk":17,"date":"2027-02-22","role":"new","bonus":false,"s":["Accenture","IBM"],"sn":2},{"id":"subsets","t":"Subsets","d":"M","topic":"Backtracking","co":["Amazon","Microsoft","Google","Uber"],"n":8,"wk":17,"date":"2027-02-23","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"permutations","t":"Permutations","d":"M","topic":"Backtracking","co":["Amazon","Microsoft","Google","Zomato"],"n":9,"wk":17,"date":"2027-02-24","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"combination-sum","t":"Combination Sum","d":"M","topic":"Backtracking","co":["Google","Amazon","Microsoft","Zomato"],"n":11,"wk":17,"date":"2027-02-25","role":"new","bonus":false,"s":[],"sn":0},{"id":"palindrome-partitioning","t":"Palindrome Partitioning","d":"M","topic":"Backtracking","co":["Salesforce","Amazon","Google","Microsoft"],"n":6,"wk":17,"date":"2027-02-26","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"combination-sum-ii","t":"Combination Sum II","d":"M","topic":"Backtracking","co":["Amazon","Google","Microsoft","Adobe"],"n":9,"wk":17,"date":"2027-02-28","role":"timed","bonus":false,"s":[],"sn":0},{"id":"n-queens","t":"N-Queens","d":"H","topic":"Backtracking","co":["Microsoft","Amazon","Google","Zoho"],"n":7,"wk":17,"date":"2027-02-28","role":"timed","bonus":false,"s":["Accenture","Infosys","TCS"],"sn":4},{"id":"flood-fill","t":"Flood Fill","d":"E","topic":"Graphs","co":["Microsoft","Amazon","Google","Uber"],"n":5,"wk":18,"date":"2027-03-01","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"find-if-path-exists-in-graph","t":"Find if Path Exists in Graph","d":"E","topic":"Graphs","co":["Amazon","Microsoft","Google"],"n":3,"wk":18,"date":"2027-03-02","role":"new","bonus":false,"s":[],"sn":0},{"id":"number-of-islands","t":"Number of Islands","d":"M","topic":"Graphs","co":["Oracle","Uber","Amazon","Visa"],"n":21,"wk":18,"date":"2027-03-03","role":"new","bonus":false,"s":["Infosys","Accenture","IBM"],"sn":4},{"id":"rotting-oranges","t":"Rotting Oranges","d":"M","topic":"Graphs","co":["Amazon","Flipkart","Salesforce","Microsoft"],"n":16,"wk":18,"date":"2027-03-04","role":"new","bonus":false,"s":["Infosys","IBM","Cognizant"],"sn":4},{"id":"course-schedule-ii","t":"Course Schedule II","d":"M","topic":"Graphs","co":["Visa","Salesforce","Walmart","Amazon"],"n":13,"wk":18,"date":"2027-03-05","role":"new","bonus":false,"s":["IBM"],"sn":1},{"id":"course-schedule","t":"Course Schedule","d":"M","topic":"Graphs","co":["Amazon","Salesforce","Google","Microsoft"],"n":15,"wk":18,"date":"2027-03-07","role":"timed","bonus":false,"s":["Infosys"],"sn":1},{"id":"accounts-merge","t":"Accounts Merge","d":"M","topic":"Graphs","co":["Oracle","Goldman","Amazon","Microsoft"],"n":7,"wk":18,"date":"2027-03-07","role":"timed","bonus":false,"s":[],"sn":0},{"id":"surrounded-regions","t":"Surrounded Regions","d":"M","topic":"Graphs","co":["Microsoft","Amazon","Google","Nutanix"],"n":7,"wk":19,"date":"2027-03-08","role":"new","bonus":false,"s":[],"sn":0},{"id":"number-of-provinces","t":"Number of Provinces","d":"M","topic":"Graphs","co":["Uber","Amazon","Google","Adobe"],"n":5,"wk":19,"date":"2027-03-09","role":"new","bonus":false,"s":[],"sn":0},{"id":"max-area-of-island","t":"Max Area of Island","d":"M","topic":"Graphs","co":["Amazon","Google","Intuit","Zoho"],"n":9,"wk":19,"date":"2027-03-10","role":"new","bonus":false,"s":[],"sn":0},{"id":"pacific-atlantic-water-flow","t":"Pacific Atlantic Water Flow","d":"M","topic":"Graphs","co":["Amazon","Google","Nutanix","ServiceNow"],"n":7,"wk":19,"date":"2027-03-11","role":"new","bonus":false,"s":[],"sn":0},{"id":"clone-graph","t":"Clone Graph","d":"M","topic":"Graphs","co":["Amazon","Google","Nutanix","Uber"],"n":6,"wk":19,"date":"2027-03-12","role":"new","bonus":false,"s":[],"sn":0},{"id":"01-matrix","t":"01 Matrix","d":"M","topic":"Graphs","co":["Amazon","Google","PhonePe","Microsoft"],"n":5,"wk":19,"date":"2027-03-14","role":"timed","bonus":false,"s":[],"sn":0},{"id":"shortest-path-in-binary-matrix","t":"Shortest Path in Binary Matrix","d":"M","topic":"Graphs","co":["Microsoft","Google","Amazon","Uber"],"n":4,"wk":19,"date":"2027-03-14","role":"timed","bonus":false,"s":[],"sn":0},{"id":"redundant-connection","t":"Redundant Connection","d":"M","topic":"Graphs","co":["Microsoft","Google","Amazon","Oracle"],"n":4,"wk":20,"date":"2027-03-15","role":"new","bonus":false,"s":[],"sn":0},{"id":"is-graph-bipartite","t":"Is Graph Bipartite?","d":"M","topic":"Graphs","co":["Amazon","Google","LinkedIn","Microsoft"],"n":5,"wk":20,"date":"2027-03-16","role":"new","bonus":false,"s":[],"sn":0},{"id":"snakes-and-ladders","t":"Snakes and Ladders","d":"M","topic":"Graphs","co":["Amazon","Zomato","Google","Microsoft"],"n":5,"wk":20,"date":"2027-03-17","role":"new","bonus":false,"s":[],"sn":0},{"id":"keys-and-rooms","t":"Keys and Rooms","d":"M","topic":"Graphs","co":["Google","Oracle","Amazon","Microsoft"],"n":4,"wk":20,"date":"2027-03-18","role":"new","bonus":false,"s":[],"sn":0},{"id":"number-of-enclaves","t":"Number of Enclaves","d":"M","topic":"Graphs","co":["Google","Uber","Microsoft","Amazon"],"n":4,"wk":20,"date":"2027-03-19","role":"new","bonus":false,"s":[],"sn":0},{"id":"word-ladder","t":"Word Ladder","d":"H","topic":"Graphs","co":["Amazon","Google","LinkedIn","Adobe"],"n":13,"wk":20,"date":"2027-03-21","role":"timed","bonus":false,"s":["TCS"],"sn":1},{"id":"cheapest-flights-within-k-stops","t":"Cheapest Flights Within K Stops","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Oracle","Flipkart","Amazon","Google"],"n":8,"wk":20,"date":"2027-03-21","role":"timed","bonus":false,"s":[],"sn":0},{"id":"most-stones-removed-with-same-row-or-column","t":"Most Stones Removed with Same Row or Column","d":"M","topic":"Shortest paths, topo sort, union-find","co":["PhonePe","Google","Media.net","Amazon"],"n":5,"wk":21,"date":"2027-03-22","role":"new","bonus":false,"s":[],"sn":0},{"id":"evaluate-division","t":"Evaluate Division","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Amazon","Microsoft","Google","Uber"],"n":7,"wk":21,"date":"2027-03-23","role":"new","bonus":false,"s":[],"sn":0},{"id":"network-delay-time","t":"Network Delay Time","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Google","Amazon","Salesforce","Cisco"],"n":5,"wk":21,"date":"2027-03-24","role":"new","bonus":false,"s":[],"sn":0},{"id":"path-with-minimum-effort","t":"Path With Minimum Effort","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Google","Amazon","Nutanix","Visa"],"n":5,"wk":21,"date":"2027-03-25","role":"new","bonus":false,"s":[],"sn":0},{"id":"number-of-operations-to-make-network-connected","t":"Number of Operations to Make Network Connected","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Amazon","PhonePe","Salesforce","Microsoft"],"n":5,"wk":21,"date":"2027-03-26","role":"new","bonus":false,"s":["IBM"],"sn":1},{"id":"min-cost-to-connect-all-points","t":"Min Cost to Connect All Points","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Google","Nutanix","Uber","Amazon"],"n":5,"wk":21,"date":"2027-03-28","role":"timed","bonus":false,"s":["IBM"],"sn":1},{"id":"minimum-height-trees","t":"Minimum Height Trees","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Google","Amazon","Microsoft"],"n":3,"wk":21,"date":"2027-03-28","role":"timed","bonus":false,"s":[],"sn":0},{"id":"find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance","t":"Find the City With the Smallest Number of Neighbors at a Threshold Distance","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Microsoft","Uber","Google","Amazon"],"n":4,"wk":22,"date":"2027-03-29","role":"new","bonus":false,"s":[],"sn":0},{"id":"find-eventual-safe-states","t":"Find Eventual Safe States","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Amazon","Google","Uber","Microsoft"],"n":4,"wk":22,"date":"2027-03-30","role":"new","bonus":false,"s":[],"sn":0},{"id":"satisfiability-of-equality-equations","t":"Satisfiability of Equality Equations","d":"M","topic":"Shortest paths, topo sort, union-find","co":["Amazon","Google"],"n":2,"wk":22,"date":"2027-03-31","role":"new","bonus":false,"s":[],"sn":0},{"id":"reconstruct-itinerary","t":"Reconstruct Itinerary","d":"H","topic":"Shortest paths, topo sort, union-find","co":["PhonePe","Google","Flipkart","Adobe"],"n":10,"wk":22,"date":"2027-04-01","role":"new","bonus":false,"s":[],"sn":0},{"id":"swim-in-rising-water","t":"Swim in Rising Water","d":"H","topic":"Shortest paths, topo sort, union-find","co":["Google","Amazon","Salesforce","Microsoft"],"n":4,"wk":22,"date":"2027-04-02","role":"new","bonus":false,"s":[],"sn":0},{"id":"sort-items-by-groups-respecting-dependencies","t":"Sort Items by Groups Respecting Dependencies","d":"H","topic":"Shortest paths, topo sort, union-find","co":["Google","Amazon"],"n":2,"wk":22,"date":"2027-04-04","role":"timed","bonus":false,"s":[],"sn":0},{"id":"climbing-stairs","t":"Climbing Stairs","d":"E","topic":"1D dynamic programming","co":["Intuit","Amazon","Microsoft","Google"],"n":9,"wk":22,"date":"2027-04-04","role":"timed","bonus":false,"s":["Accenture","Infosys","TCS"],"sn":6},{"id":"min-cost-climbing-stairs","t":"Min Cost Climbing Stairs","d":"E","topic":"1D dynamic programming","co":["Amazon","Google","Microsoft"],"n":3,"wk":23,"date":"2027-04-05","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"longest-palindromic-substring","t":"Longest Palindromic Substring","d":"M","topic":"1D dynamic programming","co":["Adobe","Microsoft","Amazon","Visa"],"n":17,"wk":23,"date":"2027-04-06","role":"new","bonus":false,"s":["Cognizant","TCS","EPAM"],"sn":8},{"id":"house-robber","t":"House Robber","d":"M","topic":"1D dynamic programming","co":["Microsoft","Amazon","Google","Cisco"],"n":13,"wk":23,"date":"2027-04-07","role":"new","bonus":false,"s":["Infosys","TCS","EPAM"],"sn":3},{"id":"coin-change","t":"Coin Change","d":"M","topic":"1D dynamic programming","co":["Amazon","Google","Microsoft","Walmart"],"n":13,"wk":23,"date":"2027-04-08","role":"new","bonus":false,"s":["Infosys","IBM"],"sn":2},{"id":"word-break","t":"Word Break","d":"M","topic":"1D dynamic programming","co":["Walmart","Amazon","Microsoft","Google"],"n":10,"wk":23,"date":"2027-04-09","role":"new","bonus":false,"s":[],"sn":0},{"id":"maximum-product-subarray","t":"Maximum Product Subarray","d":"M","topic":"1D dynamic programming","co":["LinkedIn","Amazon","Google","Adobe"],"n":9,"wk":23,"date":"2027-04-11","role":"timed","bonus":false,"s":["Infosys","TCS","IBM"],"sn":3},{"id":"longest-increasing-subsequence","t":"Longest Increasing Subsequence","d":"M","topic":"1D dynamic programming","co":["Microsoft","Amazon","Google","Walmart"],"n":9,"wk":23,"date":"2027-04-11","role":"timed","bonus":false,"s":["Infosys","Accenture","TCS"],"sn":3},{"id":"palindromic-substrings","t":"Palindromic Substrings","d":"M","topic":"1D dynamic programming","co":["Goldman","Amazon","Google","Walmart"],"n":9,"wk":24,"date":"2027-04-12","role":"new","bonus":false,"s":["IBM","HCL","Cognizant"],"sn":3},{"id":"decode-ways","t":"Decode Ways","d":"M","topic":"1D dynamic programming","co":["Microsoft","Google","Walmart","PhonePe"],"n":12,"wk":24,"date":"2027-04-13","role":"new","bonus":false,"s":["EPAM","Infosys"],"sn":2},{"id":"partition-equal-subset-sum","t":"Partition Equal Subset Sum","d":"M","topic":"1D dynamic programming","co":["Amazon","Google","Microsoft","Visa"],"n":6,"wk":24,"date":"2027-04-14","role":"new","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"house-robber-ii","t":"House Robber II","d":"M","topic":"1D dynamic programming","co":["Google","Amazon","Nutanix","ServiceNow"],"n":8,"wk":24,"date":"2027-04-15","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"longest-common-subsequence","t":"Longest Common Subsequence","d":"M","topic":"2D dynamic programming","co":["Visa","Microsoft","Amazon","Google"],"n":8,"wk":24,"date":"2027-04-16","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"edit-distance","t":"Edit Distance","d":"M","topic":"2D dynamic programming","co":["Amazon","Microsoft","Google","Swiggy"],"n":11,"wk":24,"date":"2027-04-18","role":"timed","bonus":false,"s":["Infosys","EPAM","IBM"],"sn":3},{"id":"unique-paths","t":"Unique Paths","d":"M","topic":"2D dynamic programming","co":["Microsoft","Amazon","Google","Razorpay"],"n":8,"wk":24,"date":"2027-04-18","role":"timed","bonus":false,"s":["EPAM","TCS"],"sn":2},{"id":"minimum-path-sum","t":"Minimum Path Sum","d":"M","topic":"2D dynamic programming","co":["Goldman","Microsoft","Google","Amazon"],"n":6,"wk":25,"date":"2027-04-19","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"maximal-square","t":"Maximal Square","d":"M","topic":"2D dynamic programming","co":["Google","Amazon","PhonePe","Zomato"],"n":10,"wk":25,"date":"2027-04-20","role":"new","bonus":false,"s":[],"sn":0},{"id":"distinct-subsequences","t":"Distinct Subsequences","d":"H","topic":"2D dynamic programming","co":["Swiggy","Amazon","Google","Microsoft"],"n":7,"wk":25,"date":"2027-04-21","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"burst-balloons","t":"Burst Balloons","d":"H","topic":"2D dynamic programming","co":["Microsoft","Google","Amazon","PhonePe"],"n":9,"wk":25,"date":"2027-04-22","role":"new","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"longest-increasing-path-in-a-matrix","t":"Longest Increasing Path in a Matrix","d":"H","topic":"2D dynamic programming","co":["Visa","Google","Amazon","Nutanix"],"n":9,"wk":25,"date":"2027-04-23","role":"new","bonus":false,"s":["EPAM","Infosys"],"sn":2},{"id":"regular-expression-matching","t":"Regular Expression Matching","d":"H","topic":"2D dynamic programming","co":["Amazon","Google","Microsoft","Zoho"],"n":8,"wk":25,"date":"2027-04-25","role":"timed","bonus":false,"s":["Infosys","Accenture","TCS"],"sn":3},{"id":"maximum-subarray","t":"Maximum Subarray","d":"M","topic":"Greedy","co":["LinkedIn","Oracle","Microsoft","Amazon"],"n":19,"wk":25,"date":"2027-04-25","role":"timed","bonus":false,"s":["TCS","Infosys","Accenture"],"sn":7},{"id":"jump-game-ii","t":"Jump Game II","d":"M","topic":"Greedy","co":["Meesho","Flipkart","Salesforce","Amazon"],"n":15,"wk":26,"date":"2027-04-26","role":"new","bonus":false,"s":["Infosys","IBM","TCS"],"sn":3},{"id":"gas-station","t":"Gas Station","d":"M","topic":"Greedy","co":["Sprinklr","Adobe","Goldman","Amazon"],"n":13,"wk":26,"date":"2027-04-27","role":"new","bonus":false,"s":["Infosys","TCS"],"sn":2},{"id":"jump-game","t":"Jump Game","d":"M","topic":"Greedy","co":["Amazon","Google","Microsoft","Adobe"],"n":10,"wk":26,"date":"2027-04-28","role":"new","bonus":false,"s":["Infosys","Cognizant","TCS"],"sn":3},{"id":"valid-parenthesis-string","t":"Valid Parenthesis String","d":"M","topic":"Greedy","co":["Oracle","Microsoft","Google","Amazon"],"n":7,"wk":26,"date":"2027-04-29","role":"new","bonus":false,"s":["PwC"],"sn":1},{"id":"partition-labels","t":"Partition Labels","d":"M","topic":"Greedy","co":["Microsoft","Amazon","Google","LinkedIn"],"n":4,"wk":26,"date":"2027-04-30","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"candy","t":"Candy","d":"H","topic":"Greedy","co":["Amazon","Google","Walmart","Microsoft"],"n":9,"wk":26,"date":"2027-05-02","role":"timed","bonus":false,"s":["Infosys","Accenture"],"sn":2},{"id":"implement-trie-prefix-tree","t":"Implement Trie (Prefix Tree)","d":"M","topic":"Tries","co":["Google","Microsoft","Amazon","Nutanix"],"n":7,"wk":26,"date":"2027-05-02","role":"timed","bonus":false,"s":[],"sn":0},{"id":"design-add-and-search-words-data-structure","t":"Design Add and Search Words Data Structure","d":"M","topic":"Tries","co":["Amazon","Atlassian","Microsoft","Oracle"],"n":5,"wk":27,"date":"2027-05-03","role":"new","bonus":false,"s":[],"sn":0},{"id":"word-search-ii","t":"Word Search II","d":"H","topic":"Tries","co":["Uber","Amazon","Google","Cisco"],"n":7,"wk":27,"date":"2027-05-04","role":"new","bonus":false,"s":[],"sn":0},{"id":"happy-number","t":"Happy Number","d":"E","topic":"Math, matrix and bits","co":["Google","Amazon","Microsoft","Swiggy"],"n":8,"wk":27,"date":"2027-05-05","role":"new","bonus":false,"s":["Accenture","TCS"],"sn":2},{"id":"spiral-matrix","t":"Spiral Matrix","d":"M","topic":"Math, matrix and bits","co":["Google","Amazon","Microsoft","Zoho"],"n":16,"wk":27,"date":"2027-05-06","role":"new","bonus":false,"s":["TCS","Infosys","IBM"],"sn":3},{"id":"rotate-image","t":"Rotate Image","d":"M","topic":"Math, matrix and bits","co":["Amazon","Google","Microsoft","Zoho"],"n":12,"wk":27,"date":"2027-05-07","role":"new","bonus":false,"s":["IBM","Infosys","Accenture"],"sn":4},{"id":"powx-n","t":"Pow(x, n)","d":"M","topic":"Math, matrix and bits","co":["Google","Amazon","Microsoft","LinkedIn"],"n":11,"wk":27,"date":"2027-05-09","role":"timed","bonus":false,"s":["TCS","EPAM","Infosys"],"sn":3},{"id":"reverse-integer","t":"Reverse Integer","d":"M","topic":"Math, matrix and bits","co":["Google","Amazon","Microsoft","Oracle"],"n":5,"wk":27,"date":"2027-05-09","role":"timed","bonus":false,"s":["Accenture","TCS","EPAM"],"sn":6},{"id":"string-compression","t":"String Compression","d":"M","topic":"Mixed company-frequent sets","co":["Salesforce","Amazon","Goldman","Google"],"n":9,"wk":28,"date":"2027-05-10","role":"new","bonus":false,"s":["EPAM","Accenture","Cognizant"],"sn":5},{"id":"best-time-to-buy-and-sell-stock-ii","t":"Best Time to Buy and Sell Stock II","d":"M","topic":"Mixed company-frequent sets","co":["Meesho","Google","Amazon","Microsoft"],"n":9,"wk":28,"date":"2027-05-11","role":"new","bonus":false,"s":["Infosys","Accenture","TCS"],"sn":3},{"id":"insert-delete-getrandom-o1","t":"Insert Delete GetRandom O(1)","d":"M","topic":"Mixed company-frequent sets","co":["DE Shaw","Amazon","Google","Microsoft"],"n":8,"wk":28,"date":"2027-05-12","role":"new","bonus":false,"s":[],"sn":0},{"id":"reorganize-string","t":"Reorganize String","d":"M","topic":"Mixed company-frequent sets","co":["DE Shaw","Amazon","Google","Zoho"],"n":8,"wk":28,"date":"2027-05-13","role":"new","bonus":false,"s":["IBM"],"sn":1},{"id":"single-element-in-a-sorted-array","t":"Single Element in a Sorted Array","d":"M","topic":"Mixed company-frequent sets","co":["Amazon","Google","Microsoft","Zomato"],"n":9,"wk":28,"date":"2027-05-14","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"integer-to-roman","t":"Integer to Roman","d":"M","topic":"Mixed company-frequent sets","co":["Amazon","Google","Microsoft","Adobe"],"n":10,"wk":28,"date":"2027-05-16","role":"timed","bonus":false,"s":["IBM","TCS","Infosys"],"sn":3},{"id":"next-greater-element-ii","t":"Next Greater Element II","d":"M","topic":"Mixed company-frequent sets","co":["Amazon","Microsoft","Google","ServiceNow"],"n":8,"wk":28,"date":"2027-05-16","role":"timed","bonus":false,"s":["TCS"],"sn":1},{"id":"largest-number","t":"Largest Number","d":"M","topic":"Mixed company-frequent sets","co":["Amazon","Microsoft","Google","Zoho"],"n":8,"wk":29,"date":"2027-05-17","role":"new","bonus":false,"s":["Infosys","Accenture"],"sn":2},{"id":"set-matrix-zeroes","t":"Set Matrix Zeroes","d":"M","topic":"Mixed company-frequent sets","co":["Amazon","Microsoft","Google","Walmart"],"n":8,"wk":29,"date":"2027-05-18","role":"new","bonus":false,"s":["TCS","Infosys"],"sn":2},{"id":"amount-of-time-for-binary-tree-to-be-infected","t":"Amount of Time for Binary Tree to Be Infected","d":"M","topic":"Mixed company-frequent sets","co":["Salesforce","Amazon","ServiceNow","PhonePe"],"n":9,"wk":29,"date":"2027-05-19","role":"new","bonus":false,"s":[],"sn":0},{"id":"maximum-number-of-events-that-can-be-attended","t":"Maximum Number of Events That Can Be Attended","d":"M","topic":"Mixed company-frequent sets","co":["Microsoft","Google","Visa","Oracle"],"n":9,"wk":29,"date":"2027-05-20","role":"new","bonus":false,"s":[],"sn":0},{"id":"longest-valid-parentheses","t":"Longest Valid Parentheses","d":"H","topic":"Mixed company-frequent sets","co":["Visa","Microsoft","Amazon","Google"],"n":10,"wk":29,"date":"2027-05-21","role":"new","bonus":false,"s":["IBM","Accenture","Infosys"],"sn":3},{"id":"lfu-cache","t":"LFU Cache","d":"H","topic":"Mixed company-frequent sets","co":["Salesforce","Goldman","Amazon","Google"],"n":12,"wk":29,"date":"2027-05-23","role":"timed","bonus":false,"s":[],"sn":0},{"id":"split-array-largest-sum","t":"Split Array Largest Sum","d":"H","topic":"Mixed company-frequent sets","co":["Uber","Amazon","Google","Microsoft"],"n":9,"wk":29,"date":"2027-05-23","role":"timed","bonus":false,"s":["Infosys","Deloitte"],"sn":2},{"id":"binary-tree-cameras","t":"Binary Tree Cameras","d":"H","topic":"Mixed company-frequent sets","co":["DE Shaw","Amazon","Microsoft","Google"],"n":8,"wk":30,"date":"2027-05-24","role":"new","bonus":false,"s":[],"sn":0},{"id":"maximal-rectangle","t":"Maximal Rectangle","d":"H","topic":"Mixed company-frequent sets","co":["Microsoft","Amazon","Google","Sprinklr"],"n":10,"wk":30,"date":"2027-05-25","role":"new","bonus":false,"s":["TCS"],"sn":1},{"id":"basic-calculator","t":"Basic Calculator","d":"H","topic":"Mixed company-frequent sets","co":["Microsoft","Amazon","Google","Uber"],"n":8,"wk":30,"date":"2027-05-26","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"wildcard-matching","t":"Wildcard Matching","d":"H","topic":"Mixed company-frequent sets","co":["Amazon","Microsoft","Google","Zoho"],"n":8,"wk":30,"date":"2027-05-27","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"russian-doll-envelopes","t":"Russian Doll Envelopes","d":"H","topic":"Mixed company-frequent sets","co":["Google","Amazon","Media.net","Zomato"],"n":10,"wk":30,"date":"2027-05-28","role":"new","bonus":false,"s":["Infosys"],"sn":1},{"id":"maximum-profit-in-job-scheduling","t":"Maximum Profit in Job Scheduling","d":"H","topic":"Mixed company-frequent sets","co":["Amazon","Google","PhonePe","Meesho"],"n":9,"wk":30,"date":"2027-05-30","role":"timed","bonus":false,"s":["Infosys"],"sn":1},{"id":"text-justification","t":"Text Justification","d":"H","topic":"Mixed company-frequent sets","co":["Google","Amazon","Visa","Uber"],"n":9,"wk":30,"date":"2027-05-30","role":"timed","bonus":false,"s":[],"sn":0},{"id":"find-all-duplicates-in-an-array","t":"Find All Duplicates in an Array","d":"M","topic":"Arrays and hashing","co":["Google","Amazon","Walmart","Microsoft"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"encode-and-decode-tinyurl","t":"Encode and Decode TinyURL","d":"M","topic":"Arrays and hashing","co":["Uber","Salesforce","Amazon","Google"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"boats-to-save-people","t":"Boats to Save People","d":"M","topic":"Two pointers","co":["Amazon","Google","Microsoft","Walmart"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["IBM","Cognizant","TCS"],"sn":3},{"id":"maximum-points-you-can-obtain-from-cards","t":"Maximum Points You Can Obtain from Cards","d":"M","topic":"Sliding window","co":["Microsoft","Amazon","Google","Flipkart"],"n":7,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["Infosys"],"sn":1},{"id":"simplify-path","t":"Simplify Path","d":"M","topic":"Stack and monotonic stack","co":["Microsoft","Google","Amazon","Visa"],"n":7,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"car-fleet","t":"Car Fleet","d":"M","topic":"Stack and monotonic stack","co":["Amazon","Microsoft","Google","Nutanix"],"n":6,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"evaluate-reverse-polish-notation","t":"Evaluate Reverse Polish Notation","d":"M","topic":"Stack and monotonic stack","co":["Amazon","Google","LinkedIn","Microsoft"],"n":6,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["TCS","Infosys"],"sn":2},{"id":"search-insert-position","t":"Search Insert Position","d":"E","topic":"Binary search","co":["Amazon","Google","Microsoft","Zoho"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["Accenture","TCS","Infosys"],"sn":3},{"id":"time-based-key-value-store","t":"Time Based Key-Value Store","d":"M","topic":"Binary search","co":["Amazon","Microsoft","Google","Oracle"],"n":7,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"middle-of-the-linked-list","t":"Middle of the Linked List","d":"E","topic":"Linked list","co":["Google","Amazon","Microsoft","Walmart"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["IBM","Accenture","TCS"],"sn":3},{"id":"remove-nth-node-from-end-of-list","t":"Remove Nth Node From End of List","d":"M","topic":"Linked list","co":["Amazon","Google","Microsoft","Flipkart"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["Accenture","TCS"],"sn":2},{"id":"intersection-of-two-linked-lists","t":"Intersection of Two Linked Lists","d":"E","topic":"Linked list","co":["Amazon","Microsoft","Google","LinkedIn"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"minimum-interval-to-include-each-query","t":"Minimum Interval to Include Each Query","d":"H","topic":"Prefix sum and intervals","co":["Google","Amazon"],"n":2,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"balanced-binary-tree","t":"Balanced Binary Tree","d":"E","topic":"Trees and BST","co":["Microsoft","Amazon","Google","Visa"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["TCS"],"sn":1},{"id":"lowest-common-ancestor-of-a-binary-search-tree","t":"Lowest Common Ancestor of a Binary Search Tree","d":"M","topic":"Trees and BST","co":["Google","Amazon","Microsoft","LinkedIn"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"binary-tree-right-side-view","t":"Binary Tree Right Side View","d":"M","topic":"Trees and BST","co":["Amazon","Google","Oracle","ServiceNow"],"n":6,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["Accenture"],"sn":1},{"id":"symmetric-tree","t":"Symmetric Tree","d":"E","topic":"Trees and BST","co":["Amazon","Google","Microsoft","LinkedIn"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["EPAM","Infosys"],"sn":2},{"id":"subtree-of-another-tree","t":"Subtree of Another Tree","d":"E","topic":"Trees and BST","co":["Microsoft","Google","Amazon"],"n":3,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["TCS"],"sn":1},{"id":"count-good-nodes-in-binary-tree","t":"Count Good Nodes in Binary Tree","d":"M","topic":"Trees and BST","co":["Microsoft","Amazon","Google"],"n":3,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"design-twitter","t":"Design Twitter","d":"M","topic":"Heaps","co":["Google","Amazon","Meesho","Swiggy"],"n":7,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"subsets-ii","t":"Subsets II","d":"M","topic":"Backtracking","co":["Microsoft","Amazon","Google","Walmart"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["TCS"],"sn":1},{"id":"coin-change-ii","t":"Coin Change II","d":"M","topic":"2D dynamic programming","co":["Microsoft","Google","Amazon","DE Shaw"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["Infosys"],"sn":1},{"id":"target-sum","t":"Target Sum","d":"M","topic":"2D dynamic programming","co":["Amazon","Microsoft","Google","Myntra"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"unique-paths-ii","t":"Unique Paths II","d":"M","topic":"2D dynamic programming","co":["Amazon","Microsoft","Google","Flipkart"],"n":5,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"interleaving-string","t":"Interleaving String","d":"M","topic":"2D dynamic programming","co":["Amazon","Google","Zoho","Microsoft"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"best-time-to-buy-and-sell-stock-with-cooldown","t":"Best Time to Buy and Sell Stock with Cooldown","d":"M","topic":"2D dynamic programming","co":["Amazon","Google","Microsoft"],"n":3,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["Infosys"],"sn":1},{"id":"hand-of-straights","t":"Hand of Straights","d":"M","topic":"Greedy","co":["Google","Amazon","Visa","Microsoft"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"merge-triplets-to-form-target-triplet","t":"Merge Triplets to Form Target Triplet","d":"M","topic":"Greedy","co":["Google"],"n":1,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"set-matrix-zeroes","t":"Set Matrix Zeroes","d":"M","topic":"Math, matrix and bits","co":["Amazon","Microsoft","Google","Walmart"],"n":8,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["TCS","Infosys"],"sn":2},{"id":"multiply-strings","t":"Multiply Strings","d":"M","topic":"Math, matrix and bits","co":["Amazon","Zoho","Microsoft","Google"],"n":6,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["EPAM","TCS"],"sn":2},{"id":"sum-of-two-integers","t":"Sum of Two Integers","d":"M","topic":"Math, matrix and bits","co":["Google","Amazon","Swiggy","Microsoft"],"n":4,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["IBM"],"sn":1},{"id":"number-of-1-bits","t":"Number of 1 Bits","d":"E","topic":"Math, matrix and bits","co":["Google","Amazon","Microsoft"],"n":3,"wk":null,"date":null,"role":"bonus","bonus":true,"s":["IBM"],"sn":1},{"id":"reverse-bits","t":"Reverse Bits","d":"E","topic":"Math, matrix and bits","co":["Amazon","Google","Microsoft"],"n":3,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"counting-bits","t":"Counting Bits","d":"E","topic":"Math, matrix and bits","co":["Google","Microsoft","Amazon"],"n":3,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"detect-squares","t":"Detect Squares","d":"M","topic":"Math, matrix and bits","co":["Amazon","Google"],"n":2,"wk":null,"date":null,"role":"bonus","bonus":true,"s":[],"sn":0},{"id":"palindrome-number","t":"Palindrome Number","d":"E","topic":"Service MNC favourites","co":["Google","Amazon","Microsoft","Zoho"],"n":6,"s":["Cognizant","TCS","Accenture"],"sn":11,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"add-binary","t":"Add Binary","d":"E","topic":"Service MNC favourites","co":["Google","Amazon","Microsoft","Walmart"],"n":6,"s":["Wipro","Deloitte","Capgemini"],"sn":6,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"reverse-string","t":"Reverse String","d":"E","topic":"Service MNC favourites","co":["Google","Amazon","Microsoft","Goldman"],"n":4,"s":["TCS","Wipro","EPAM"],"sn":5,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"max-consecutive-ones","t":"Max Consecutive Ones","d":"E","topic":"Service MNC favourites","co":["Microsoft","Google","Amazon","Adobe"],"n":4,"s":["Wipro","Accenture","Cognizant"],"sn":5,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"fibonacci-number","t":"Fibonacci Number","d":"E","topic":"Service MNC favourites","co":["Microsoft","Google","Amazon","Zoho"],"n":4,"s":["TCS","Cognizant","Infosys"],"sn":4,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"first-unique-character-in-a-string","t":"First Unique Character in a String","d":"E","topic":"Service MNC favourites","co":["Goldman","Amazon","Google","Microsoft"],"n":10,"s":["TCS","EPAM","Deloitte"],"sn":4,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"pascals-triangle","t":"Pascal's Triangle","d":"E","topic":"Service MNC favourites","co":["Microsoft","Amazon","Google","Zoho"],"n":5,"s":["Wipro","Accenture","TCS"],"sn":4,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"reverse-vowels-of-a-string","t":"Reverse Vowels of a String","d":"E","topic":"Service MNC favourites","co":["Google","Microsoft","Amazon","Oracle"],"n":6,"s":["EPAM","Deloitte","TCS"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"find-pivot-index","t":"Find Pivot Index","d":"E","topic":"Service MNC favourites","co":["Amazon","Google","Myntra","Microsoft"],"n":5,"s":["IBM","Accenture","TCS"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"fizz-buzz","t":"Fizz Buzz","d":"E","topic":"Service MNC favourites","co":["Google","Amazon","Cisco","Microsoft"],"n":5,"s":["IBM","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"lemonade-change","t":"Lemonade Change","d":"E","topic":"Service MNC favourites","co":["Microsoft","Google","Zoho","Amazon"],"n":4,"s":["Infosys","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"contains-duplicate-ii","t":"Contains Duplicate II","d":"E","topic":"Service MNC favourites","co":["Google","Microsoft","Amazon","Adobe"],"n":5,"s":["Accenture","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"maximum-units-on-a-truck","t":"Maximum Units on a Truck","d":"E","topic":"Service MNC favourites","co":["Amazon","Salesforce","Google","Microsoft"],"n":4,"s":["IBM","Infosys"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"minimum-absolute-difference","t":"Minimum Absolute Difference","d":"E","topic":"Service MNC favourites","co":["Walmart","Salesforce","Amazon","Oracle"],"n":6,"s":["IBM","Cognizant"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"toeplitz-matrix","t":"Toeplitz Matrix","d":"E","topic":"Service MNC favourites","co":["Google","Amazon"],"n":2,"s":["Wipro","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"find-subsequence-of-length-k-with-the-largest-sum","t":"Find Subsequence of Length K With the Largest Sum","d":"E","topic":"Service MNC favourites","co":["Amazon","Google"],"n":2,"s":["Accenture","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"reverse-words-in-a-string","t":"Reverse Words in a String","d":"M","topic":"Service MNC favourites","co":["Google","Amazon","Microsoft","ServiceNow"],"n":8,"s":["Infosys","Capgemini","EPAM"],"sn":6,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"sort-characters-by-frequency","t":"Sort Characters By Frequency","d":"M","topic":"Service MNC favourites","co":["Microsoft","Amazon","Google","Flipkart"],"n":6,"s":["Accenture","EPAM","IBM"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"linked-list-cycle-ii","t":"Linked List Cycle II","d":"M","topic":"Service MNC favourites","co":["Amazon","Google","Paytm","Microsoft"],"n":5,"s":["IBM","Infosys","TCS"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"remove-all-occurrences-of-a-substring","t":"Remove All Occurrences of a Substring","d":"M","topic":"Service MNC favourites","co":["Google","Amazon","Zoho","Goldman"],"n":5,"s":["IBM","TCS","Infosys"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"contiguous-array","t":"Contiguous Array","d":"M","topic":"Service MNC favourites","co":["Cisco","Amazon","Microsoft","Google"],"n":6,"s":["Accenture","Infosys","TCS"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"wiggle-sort-ii","t":"Wiggle Sort II","d":"M","topic":"Service MNC favourites","co":["Amazon","Google","Microsoft"],"n":3,"s":["EY","IBM"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"minimum-sideway-jumps","t":"Minimum Sideway Jumps","d":"M","topic":"Service MNC favourites","co":["Oracle","Microsoft"],"n":2,"s":["Publicis Sapient","Infosys"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"peak-index-in-a-mountain-array","t":"Peak Index in a Mountain Array","d":"M","topic":"Service MNC favourites","co":["Amazon","Google","Microsoft"],"n":3,"s":["TCS","Infosys"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"swap-nodes-in-pairs","t":"Swap Nodes in Pairs","d":"M","topic":"Service MNC favourites","co":["Google","Uber","Microsoft","Amazon"],"n":5,"s":["Altimetrik","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"minimum-cost-for-tickets","t":"Minimum Cost For Tickets","d":"M","topic":"Service MNC favourites","co":["Google","Adobe","Amazon","Uber"],"n":5,"s":["Infosys","EPAM"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"delete-and-earn","t":"Delete and Earn","d":"M","topic":"Service MNC favourites","co":["Walmart","Microsoft","Amazon","Google"],"n":5,"s":["IBM","Infosys"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"minimum-moves-to-equal-array-elements","t":"Minimum Moves to Equal Array Elements","d":"M","topic":"Service MNC favourites","co":["Google","Amazon","Microsoft"],"n":3,"s":["IBM","Infosys"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"shortest-palindrome","t":"Shortest Palindrome","d":"H","topic":"Service MNC favourites","co":["Google","Uber","Microsoft","Amazon"],"n":4,"s":["EPAM","Accenture"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"minimum-number-of-increments-on-subarrays-to-form-a-target-array","t":"Minimum Number of Increments on Subarrays to Form a Target Array","d":"H","topic":"Service MNC favourites","co":["Amazon","Sprinklr","Google","Oracle"],"n":5,"s":["IBM","Infosys"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"employees-earning-more-than-their-managers","t":"Employees Earning More Than Their Managers","d":"E","topic":"SQL round","co":["Google","Amazon","Microsoft"],"n":3,"s":["TCS","Accenture","Cognizant"],"sn":5,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"rising-temperature","t":"Rising Temperature","d":"E","topic":"SQL round","co":["Google","Amazon","Meesho","Microsoft"],"n":5,"s":["Deloitte","Cognizant","Infosys"],"sn":4,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"article-views-i","t":"Article Views I","d":"E","topic":"SQL round","co":["Google","Microsoft","Amazon","LinkedIn"],"n":4,"s":["Cognizant","Accenture","TCS"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"combine-two-tables","t":"Combine Two Tables","d":"E","topic":"SQL round","co":["Google","Amazon","Microsoft"],"n":3,"s":["Cognizant","TCS","Infosys"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"average-time-of-process-per-machine","t":"Average Time of Process per Machine","d":"E","topic":"SQL round","co":["Amazon","Microsoft","Google"],"n":3,"s":["LTIMindtree","Accenture"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"find-customer-referee","t":"Find Customer Referee","d":"E","topic":"SQL round","co":["Google","Microsoft","Amazon"],"n":3,"s":["Cognizant","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"duplicate-emails","t":"Duplicate Emails","d":"E","topic":"SQL round","co":["Microsoft","Amazon","Google"],"n":3,"s":["EPAM","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"customers-who-never-order","t":"Customers Who Never Order","d":"E","topic":"SQL round","co":["Microsoft","Google","Amazon"],"n":3,"s":["Deloitte","Cognizant"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"replace-employee-id-with-the-unique-identifier","t":"Replace Employee ID With The Unique Identifier","d":"E","topic":"SQL round","co":["Microsoft","Google","Amazon"],"n":3,"s":["Cognizant","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"second-highest-salary","t":"Second Highest Salary","d":"M","topic":"SQL round","co":["Adobe","Microsoft","Amazon","Google"],"n":5,"s":["Accenture","Infosys","LTIMindtree"],"sn":8,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"consecutive-numbers","t":"Consecutive Numbers","d":"M","topic":"SQL round","co":["Microsoft","Amazon","Google","Meesho"],"n":4,"s":["Accenture","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"rank-scores","t":"Rank Scores","d":"M","topic":"SQL round","co":["Google","Microsoft","Amazon"],"n":3,"s":["Cognizant","Accenture"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"nth-highest-salary","t":"Nth Highest Salary","d":"M","topic":"SQL round","co":["Amazon","Atlassian","Google","Microsoft"],"n":4,"s":["Deloitte","Cognizant"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"managers-with-at-least-5-direct-reports","t":"Managers with at Least 5 Direct Reports","d":"M","topic":"SQL round","co":["Amazon","Microsoft","Google"],"n":3,"s":["Deloitte","TCS"],"sn":2,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true},{"id":"department-top-three-salaries","t":"Department Top Three Salaries","d":"H","topic":"SQL round","co":["Intuit","Microsoft","Amazon","Google"],"n":4,"s":["HCL","Cognizant","Infosys"],"sn":3,"wk":null,"date":null,"role":"bonus","bonus":true,"svc":true}]</script>
+<script type="application/json" id="tdata">[{"key":"csharp","name":"C# and .NET fundamentals","month":"Dec","docs":[{"label":"C# docs","url":"https://learn.microsoft.com/en-us/dotnet/csharp/"}],"angle":"You use these daily in the ERP APIs. Explain each with a line of code you've actually written.","drill":"Write a small console app that shows boxing, a struct vs class copy, and a record equality check. Print the results.","qs":[{"id":"csharp-1","q":"Value types vs reference types: where each lives and what happens when you copy one","l":"C"},{"id":"csharp-2","q":"Class vs struct vs record: when would you pick each?","l":"C"},{"id":"csharp-3","q":"Abstract class vs interface, and what default interface methods changed","l":"C"},{"id":"csharp-4","q":"What boxing and unboxing are, and why they cost performance","l":"C"},{"id":"csharp-5","q":"String immutability and when to use StringBuilder","l":"C"},{"id":"csharp-6","q":"ref, out and in parameters: differences with an example","l":"C"},{"id":"csharp-7","q":"Delegates, Func, Action and events: how they relate","l":"C"},{"id":"csharp-8","q":"Extension methods: how they work and when they're a bad idea","l":"C"},{"id":"csharp-9","q":"Generics and constraints (where T : class, new()) with a real use","l":"C"},{"id":"csharp-10","q":"Exception handling: throw vs throw ex, finally, and custom exceptions","l":"C"},{"id":"csharp-11","q":"IDisposable and the using statement: what problem they solve","l":"C"},{"id":"csharp-12","q":"Nullable reference types and how they prevent null bugs","l":"D"},{"id":"csharp-13","q":"Pattern matching and switch expressions in modern C#","l":"D"},{"id":"csharp-14","q":".NET Framework vs .NET (Core): what changed and why your work APIs run on .NET 6/7","l":"C"}]},{"key":"async","name":"Async, threading and memory","month":"Dec","docs":[{"label":"Asynchronous programming","url":"https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/"}],"angle":"Your scheduled email Windows Service is a perfect story here: background work, timers, failures.","drill":"Call three fake 200 ms operations sequentially, then with Task.WhenAll. Log both timings and explain the difference aloud.","qs":[{"id":"async-1","q":"What async/await actually does to a method (state machine, threads not blocked)","l":"C"},{"id":"async-2","q":"Task vs Thread vs ThreadPool","l":"C"},{"id":"async-3","q":"Why async void is dangerous and where it's allowed","l":"C"},{"id":"async-4","q":"Running independent calls in parallel with Task.WhenAll","l":"C"},{"id":"async-5","q":"Deadlocks from .Result and .Wait(), and how to avoid them","l":"C"},{"id":"async-6","q":"What CancellationToken is and why every async endpoint should take one","l":"C"},{"id":"async-7","q":"ConfigureAwait(false): what it does and when it matters","l":"D"},{"id":"async-8","q":"lock, SemaphoreSlim and thread-safe collections like ConcurrentDictionary","l":"D"},{"id":"async-9","q":"Garbage collection: generations, and what causes memory pressure","l":"C"},{"id":"async-10","q":"Stack vs heap, and what a memory leak looks like in .NET","l":"C"},{"id":"async-11","q":"IHostedService / BackgroundService for background jobs in ASP.NET Core","l":"D"}]},{"key":"linq","name":"LINQ","month":"Dec","docs":[{"label":"LINQ in C#","url":"https://learn.microsoft.com/en-us/dotnet/csharp/linq/"}],"angle":"You use LINQ every day at work. Interviewers dig into when queries run and where they run.","drill":"Take one real report query from work (sanitised) and write it three ways: query syntax, method syntax, and as a projection to a DTO.","qs":[{"id":"linq-1","q":"Deferred vs immediate execution: which operators run the query","l":"C"},{"id":"linq-2","q":"IEnumerable vs IQueryable: where the filtering happens","l":"C"},{"id":"linq-3","q":"Select vs SelectMany with an example","l":"C"},{"id":"linq-4","q":"First vs FirstOrDefault vs Single vs SingleOrDefault","l":"C"},{"id":"linq-5","q":"Why Any() is better than Count() > 0","l":"C"},{"id":"linq-6","q":"GroupBy with a composite key","l":"C"},{"id":"linq-7","q":"Inner join and left join in LINQ","l":"C"},{"id":"linq-8","q":"ToList vs ToArray vs AsEnumerable: when each is right","l":"C"},{"id":"linq-9","q":"Multiple enumeration: why passing an IEnumerable around can hit the database twice","l":"D"},{"id":"linq-10","q":"Func<T> vs Expression<Func<T>> and why EF Core needs expression trees","l":"D"},{"id":"linq-11","q":"Paging with Skip and Take, and its cost on large tables","l":"D"},{"id":"linq-12","q":"When LINQ is the wrong tool (hot loops, complex SQL)","l":"D"}]},{"key":"sql","name":"SQL Server and T-SQL","month":"Jan","docs":[{"label":"Index design guide","url":"https://learn.microsoft.com/en-us/sql/relational-databases/sql-server-index-design-guide?view=sql-server-ver17"},{"label":"Execution plans","url":"https://learn.microsoft.com/en-us/sql/relational-databases/performance/display-an-actual-execution-plan?view=sql-server-ver17"}],"angle":"Your strongest area: stored procedures and query tuning for manufacturing clients. Bring a before/after number.","drill":"Pick a slow query (or build a 1M-row test table), capture the actual execution plan, add one index, and record the before and after time.","qs":[{"id":"sql-1","q":"Clustered vs non-clustered indexes, and covering indexes with INCLUDE","l":"C"},{"id":"sql-2","q":"How you read an execution plan: scans, seeks, key lookups","l":"C"},{"id":"sql-3","q":"Stored procedure vs function vs view","l":"C"},{"id":"sql-4","q":"Types of joins, and when a LEFT JOIN returns more rows than expected","l":"C"},{"id":"sql-5","q":"WHERE vs HAVING, and GROUP BY rules","l":"C"},{"id":"sql-6","q":"Window functions: ROW_NUMBER, RANK, DENSE_RANK, and a top-N-per-group query","l":"C"},{"id":"sql-7","q":"CTEs vs temp tables vs table variables","l":"C"},{"id":"sql-8","q":"Transactions and ACID; what isolation levels change","l":"C"},{"id":"sql-9","q":"Deadlocks: how they happen and how you'd find and fix one","l":"D"},{"id":"sql-10","q":"Parameter sniffing and why a proc is fast in SSMS but slow from the app","l":"D"},{"id":"sql-11","q":"Normalisation (1NF\u20133NF) and when you'd denormalise","l":"C"},{"id":"sql-12","q":"Primary key vs unique key vs foreign key; identity vs GUID keys","l":"C"},{"id":"sql-13","q":"Preventing SQL injection when calling SQL from .NET","l":"C"},{"id":"sql-14","q":"A query was fine last month and is slow now: how do you investigate?","l":"D"}]},{"key":"adonet","name":"ADO.NET","month":"Jan","docs":[{"label":"ADO.NET overview","url":"https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/ado-net-overview"},{"label":"Microsoft.Data.SqlClient","url":"https://learn.microsoft.com/en-us/sql/connect/ado-net/overview-sqlclient-driver?view=sql-server-ver17"}],"angle":"Service companies and ERP teams still use ADO.NET heavily. Show you know when raw ADO.NET beats an ORM.","drill":"Write one repository method with SqlConnection, SqlCommand, parameters and SqlDataReader that calls a stored procedure, wrapped in using and a transaction.","qs":[{"id":"adonet-1","q":"Core objects: SqlConnection, SqlCommand, SqlDataReader, SqlDataAdapter, DataSet","l":"C"},{"id":"adonet-2","q":"DataReader vs DataSet: connected vs disconnected access","l":"C"},{"id":"adonet-3","q":"ExecuteReader vs ExecuteNonQuery vs ExecuteScalar","l":"C"},{"id":"adonet-4","q":"Connection pooling: what it is and what breaks it","l":"C"},{"id":"adonet-5","q":"Parameterised queries and SqlParameter: why never concatenate SQL","l":"C"},{"id":"adonet-6","q":"Calling a stored procedure with input and output parameters","l":"C"},{"id":"adonet-7","q":"Transactions with SqlTransaction (and TransactionScope)","l":"C"},{"id":"adonet-8","q":"Why you must close or dispose connections; using blocks","l":"C"},{"id":"adonet-9","q":"ADO.NET vs Dapper vs EF Core: trade-offs","l":"D"},{"id":"adonet-10","q":"Bulk inserts with SqlBulkCopy","l":"D"}]},{"key":"efcore","name":"Entity Framework Core","month":"Jan","docs":[{"label":"Efficient querying","url":"https://learn.microsoft.com/en-us/ef/core/performance/efficient-querying"},{"label":"Tracking vs no-tracking","url":"https://learn.microsoft.com/en-us/ef/core/querying/tracking"}],"angle":"Your LLM gateway logs usage with EF Core, so you'll have your own examples of migrations, indexes and projections.","drill":"In the gateway, log SQL to the console, find one N+1 query, fix it with a projection or Include, and note the query count before and after.","qs":[{"id":"efcore-1","q":"DbContext lifetime and why it's scoped per request","l":"C"},{"id":"efcore-2","q":"Why injecting DbContext into a singleton breaks","l":"C"},{"id":"efcore-3","q":"Code-first vs database-first; how migrations work","l":"C"},{"id":"efcore-4","q":"Lazy vs eager vs explicit loading, and the default in EF Core","l":"C"},{"id":"efcore-5","q":"The N+1 query problem: how to spot and fix it","l":"C"},{"id":"efcore-6","q":"AsNoTracking: when to use it and the catch","l":"C"},{"id":"efcore-7","q":"Include vs projection with Select","l":"C"},{"id":"efcore-8","q":"How change tracking decides what SaveChanges writes","l":"C"},{"id":"efcore-9","q":"Concurrency conflicts: rowversion / concurrency tokens","l":"D"},{"id":"efcore-10","q":"SaveChanges with five entities and the third fails: what happens?","l":"D"},{"id":"efcore-11","q":"Bulk updates with ExecuteUpdate / ExecuteDelete and their catch","l":"D"},{"id":"efcore-12","q":"Global query filters for soft delete or multi-tenancy","l":"D"},{"id":"efcore-13","q":"A query is fast on test data but times out in production: how you diagnose","l":"D"},{"id":"efcore-14","q":"Applying migrations safely in production CI/CD","l":"D"}]},{"key":"webapi","name":"ASP.NET Core Web API","month":"Feb","docs":[{"label":"Middleware","url":"https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/?view=aspnetcore-10.0"},{"label":"Dependency injection","url":"https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection?view=aspnetcore-10.0"}],"angle":"You build and deploy Web APIs at work. Explain the request pipeline using one of your real endpoints.","drill":"Add to the gateway: global exception middleware returning ProblemDetails, request logging, a health check endpoint, and pagination on one list endpoint.","qs":[{"id":"webapi-1","q":"The request pipeline and middleware order (logging, CORS, auth, exceptions)","l":"C"},{"id":"webapi-2","q":"Middleware vs filters (action, exception, endpoint filters)","l":"C"},{"id":"webapi-3","q":"DI lifetimes: singleton, scoped, transient, and the captive dependency bug","l":"C"},{"id":"webapi-4","q":"Routing, and [FromBody] / [FromQuery] / [FromRoute] / [FromHeader]","l":"C"},{"id":"webapi-5","q":"REST principles and correct status codes (201, 204, 400, 401, 403, 404, 409)","l":"C"},{"id":"webapi-6","q":"PUT vs PATCH vs POST; idempotency","l":"C"},{"id":"webapi-7","q":"Model validation and returning ProblemDetails","l":"C"},{"id":"webapi-8","q":"Global exception handling","l":"C"},{"id":"webapi-9","q":"Pagination, filtering and sorting design for a list endpoint","l":"C"},{"id":"webapi-10","q":"API versioning strategies","l":"D"},{"id":"webapi-11","q":"Configuration and the options pattern; appsettings per environment","l":"C"},{"id":"webapi-12","q":"Caching: in-memory, distributed (Redis), output caching","l":"D"},{"id":"webapi-13","q":"Rate limiting in .NET","l":"D"},{"id":"webapi-14","q":"Minimal APIs vs controllers","l":"D"},{"id":"webapi-15","q":"Your endpoint takes 800 ms: how do you find and fix the slow part?","l":"D"}]},{"key":"security","name":"Security and authentication","month":"Feb","docs":[{"label":"ASP.NET Core authentication","url":"https://learn.microsoft.com/en-us/aspnet/core/security/authentication/?view=aspnetcore-10.0"},{"label":"JWT bearer","url":"https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0"}],"angle":"The gateway's API keys and budgets are your hands-on example of authentication and authorization.","drill":"Protect one gateway endpoint with JWT and a role or policy; write a test that calls it with and without a token.","qs":[{"id":"security-1","q":"Authentication vs authorization","l":"C"},{"id":"security-2","q":"How JWT works: header, payload, signature; what you should never put in it","l":"C"},{"id":"security-3","q":"Access tokens vs refresh tokens; handling a role change mid-token","l":"D"},{"id":"security-4","q":"Role-based vs policy-based authorization","l":"C"},{"id":"security-5","q":"OAuth 2.0 and OpenID Connect at a high level","l":"D"},{"id":"security-6","q":"CORS: what it protects and how to configure it for a React or Angular SPA","l":"C"},{"id":"security-7","q":"Storing secrets and connection strings safely across environments","l":"C"},{"id":"security-8","q":"Common attacks: SQL injection, XSS, CSRF, over-posting, and the defences","l":"C"},{"id":"security-9","q":"Hashing passwords vs encrypting data","l":"C"},{"id":"security-10","q":"API keys vs JWT for service-to-service calls","l":"D"}]},{"key":"micro","name":"Microservices and distributed systems","month":"Mar","docs":[{"label":".NET microservices guide","url":"https://learn.microsoft.com/en-us/dotnet/architecture/microservices/"},{"label":"Communication between services","url":"https://learn.microsoft.com/en-us/dotnet/architecture/microservices/architect-microservice-container-applications/communication-in-microservice-architecture"}],"angle":"You worked on HRMS .NET microservices behind an API gateway. Use that as your example for every answer.","drill":"Draw the HRMS or gateway architecture from memory: services, gateway, database per service, one sync and one async call. Explain it in 3 minutes.","qs":[{"id":"micro-1","q":"Monolith vs microservices: real costs, and when not to split","l":"C"},{"id":"micro-2","q":"How you decide service boundaries","l":"D"},{"id":"micro-3","q":"What an API gateway does (routing, auth, rate limits); Ocelot / YARP","l":"C"},{"id":"micro-4","q":"Sync (REST, gRPC) vs async (queues, events) communication","l":"C"},{"id":"micro-5","q":"Why each service owns its database","l":"C"},{"id":"micro-6","q":"Distributed transactions vs the Saga pattern (orchestration vs choreography)","l":"D"},{"id":"micro-7","q":"Eventual consistency, explained to a non-technical person","l":"D"},{"id":"micro-8","q":"Circuit breaker, retries with backoff, timeouts (Polly / resilience)","l":"C"},{"id":"micro-9","q":"Idempotency: a message processed twice charged a customer twice","l":"D"},{"id":"micro-10","q":"Outbox pattern: saving data and publishing an event reliably","l":"D"},{"id":"micro-11","q":"Service discovery and configuration","l":"D"},{"id":"micro-12","q":"Distributed tracing, correlation IDs and centralised logging","l":"C"},{"id":"micro-13","q":"Health checks: liveness vs readiness","l":"C"},{"id":"micro-14","q":"Securing service-to-service calls and passing the user identity","l":"D"}]},{"key":"design","name":"Design principles and patterns","month":"Mar","docs":[{"label":"Architectural principles","url":"https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/architectural-principles"}],"angle":"Use your ERP modules to show SOLID in practice, including a place where you'd refactor today.","drill":"Take one service class from a side project and refactor it to follow single responsibility and dependency inversion; write down what changed.","qs":[{"id":"design-1","q":"SOLID, each principle with a real example","l":"C"},{"id":"design-2","q":"DRY, KISS, YAGNI and when they conflict","l":"C"},{"id":"design-3","q":"Repository and Unit of Work: useful or redundant with EF Core?","l":"C"},{"id":"design-4","q":"Singleton, Factory, Strategy, Decorator: when you've used each","l":"C"},{"id":"design-5","q":"Clean / onion architecture layers","l":"C"},{"id":"design-6","q":"CQRS and when it's overkill","l":"D"},{"id":"design-7","q":"Composition vs inheritance","l":"C"},{"id":"design-8","q":"Low-level design: design a parking lot or rate limiter class model","l":"D"},{"id":"design-9","q":"Mediator pattern and MediatR","l":"D"},{"id":"design-10","q":"Designing for testability","l":"C"}]},{"key":"testing","name":"Testing: xUnit and Moq","month":"Apr","docs":[{"label":"Unit testing with xUnit","url":"https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-csharp-with-xunit"}],"angle":"You write xUnit tests with Moq at work. Be ready to say what you test yourself vs what AI tools draft for you.","drill":"Write three unit tests for the gateway's budget check (under, at, over budget) and one integration test with WebApplicationFactory.","qs":[{"id":"testing-1","q":"Unit vs integration vs end-to-end tests","l":"C"},{"id":"testing-2","q":"Arrange-Act-Assert and naming good tests","l":"C"},{"id":"testing-3","q":"Mocks vs stubs vs fakes; how Moq works (Setup, Verify)","l":"C"},{"id":"testing-4","q":"[Fact] vs [Theory] with InlineData","l":"C"},{"id":"testing-5","q":"What makes code hard to test, and how DI helps","l":"C"},{"id":"testing-6","q":"Integration tests with WebApplicationFactory and a test database","l":"D"},{"id":"testing-7","q":"Testing an endpoint that needs authentication","l":"D"},{"id":"testing-8","q":"Code coverage: what it tells you and what it doesn't","l":"C"},{"id":"testing-9","q":"TDD: have you used it, and when does it help?","l":"D"}]},{"key":"devops","name":"Deployment and DevOps","month":"Apr","docs":[{"label":"Containerize a .NET app","url":"https://learn.microsoft.com/en-us/dotnet/core/docker/build-container"}],"angle":"You deploy to IIS for UAT and production, and ran Docker microservices on AWS EC2 in your internship.","drill":"Containerise the gateway with a multi-stage Dockerfile, run it locally, and set up a GitHub Actions build that runs tests.","qs":[{"id":"devops-1","q":"How you deploy an ASP.NET Core app to IIS (hosting bundle, app pool, in-process vs out-of-process)","l":"C"},{"id":"devops-2","q":"Environments: Development, UAT/Staging, Production and config per environment","l":"C"},{"id":"devops-3","q":"Docker basics: image vs container, a multi-stage Dockerfile for .NET","l":"C"},{"id":"devops-4","q":"CI/CD pipeline stages: build, test, deploy","l":"C"},{"id":"devops-5","q":"Git workflow: branching, rebase vs merge, resolving conflicts","l":"C"},{"id":"devops-6","q":"Logging and monitoring in production (Serilog, structured logs)","l":"C"},{"id":"devops-7","q":"Zero-downtime deployments and rollback","l":"D"},{"id":"devops-8","q":"AWS basics you've used: EC2, S3, security groups","l":"D"},{"id":"devops-9","q":"Kubernetes at a high level: pods, deployments, services","l":"D"}]},{"key":"frontend","name":"Front end: Angular and React","month":"Apr","docs":[{"label":"Angular docs","url":"https://angular.dev/"},{"label":"React docs","url":"https://react.dev/learn"}],"angle":"You trained on Angular at TVS Next and ship React side projects. Full-stack roles will ask both basics.","drill":"Build the gateway dashboard's usage table in React with loading, error and empty states, calling your API.","qs":[{"id":"frontend-1","q":"Angular: components, modules vs standalone components, services and DI","l":"C"},{"id":"frontend-2","q":"Angular: data binding types and lifecycle hooks","l":"C"},{"id":"frontend-3","q":"Angular: Observables vs Promises; common RxJS operators (map, switchMap, debounceTime)","l":"C"},{"id":"frontend-4","q":"Angular: change detection, OnPush, and signals","l":"D"},{"id":"frontend-5","q":"Angular: route guards, interceptors for JWT","l":"C"},{"id":"frontend-6","q":"React: props vs state; useState and useEffect","l":"C"},{"id":"frontend-7","q":"React: why keys matter in lists; controlled vs uncontrolled inputs","l":"C"},{"id":"frontend-8","q":"React: avoiding unnecessary re-renders (memo, useMemo, useCallback)","l":"D"},{"id":"frontend-9","q":"Calling a .NET API from the SPA: CORS, auth headers, error handling","l":"C"},{"id":"frontend-10","q":"JavaScript basics they still ask: closures, this, event loop, == vs ===","l":"C"}]},{"key":"projects","name":"Your projects, explained","month":"May","docs":[],"angle":"These come up in every round. Prepare a 30-second, 2-minute and 10-minute version of each, out loud.","drill":"Record yourself answering three of these on your phone. Watch it back and cut every \"we\" that should be \"I\".","qs":[{"id":"projects-1","q":"Walk me through the manufacturing ERP modules you own end to end (client unnamed)","l":"C"},{"id":"projects-2","q":"The slowest query you've tuned: what it was, what you did, the before and after","l":"C"},{"id":"projects-3","q":"How you handle a production issue from ticket to fix","l":"C"},{"id":"projects-4","q":"The scheduled email Windows Service: design, failures, retries, logging","l":"C"},{"id":"projects-5","q":"HRMS microservices: your part, the gateway, how services talked","l":"C"},{"id":"projects-6","q":"LLM gateway: architecture, why Redis, how budgets are enforced, latency overhead","l":"C"},{"id":"projects-7","q":"The Body Life Gym client site: scope, client handling, delivery","l":"C"},{"id":"projects-8","q":"Switching from Java/Spring Boot to .NET: how you ramped up","l":"C"},{"id":"projects-9","q":"How you use AI tools (Claude Code, Copilot) and still own the code quality","l":"D"},{"id":"projects-10","q":"What you'd redesign in one of your projects today, and why","l":"D"}]}]</script>
+<script>
+(function(){
+  const PROBS=JSON.parse(document.getElementById('pdata').textContent);
+  const TECH=JSON.parse(document.getElementById('tdata').textContent);
+  const TLBL={'':'Not yet',shaky:'Shaky',explain:'Can explain',confident:'Confident'};
+  const MONTHS_ORDER=['Dec','Jan','Feb','Mar','Apr','May'];
+  const LOG_START='2026-10-29', CAL_START='2026-10-26', END='2027-09-19';
+  const OFFER='2027-06-18', DSTART='2026-12-01';
+  const MARKS={'2026-11-30':'Warm-up ends','2026-12-01':'Plan starts','2026-12-31':'Patterns 1–4','2027-01-31':'Patterns 5–7','2027-03-31':'Gateway shipped','2027-04-05':'Applications open','2027-05-31':'Problem set done','2027-06-18':'Offer target','2027-09-18':'Last working day'};
+  const MINS=[0,10,30,45,60,90,120];
+  const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const STLBL={'':'To do',stuck:'Stuck, used hints',solved:'Solved solo',mastered:'Mastered'};
+  const OFFS=[3,7,21];
+  const TOPIC_ORDER=['Warm-up','Arrays and hashing','Two pointers','Sliding window','Stack and monotonic stack','Binary search','Linked list','Prefix sum and intervals','Trees and BST','Heaps','Backtracking','Graphs','Shortest paths, topo sort, union-find','1D dynamic programming','2D dynamic programming','Greedy','Tries','Math, matrix and bits','Mixed company-frequent sets','Service MNC favourites','SQL round'];
+  const SECNOTE={'Service MNC favourites':'Not on the dated plan. Use them on light days, warm-up Thursdays, or the week before a service-company interview.','SQL round':'Not on the dated plan. Plays to your SQL Server work: do one in a Friday side-skill slot.'};
+
+  const pad=n=>String(n).padStart(2,'0');
+  const fmt=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  const parse=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+  const add=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return fmt(d)};
+  const diff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+  const nice=s=>{const d=parse(s);return DOW[d.getDay()]+' '+d.getDate()+' '+MON[d.getMonth()]};
+  const short=s=>{const d=parse(s);return d.getDate()+' '+MON[d.getMonth()]};
+  const today=fmt(new Date());
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  // plan index
+  const BYID={}, BYDATE={}, WEEKS={};
+  PROBS.forEach(p=>{BYID[p.id]=p; if(p.date){(BYDATE[p.date]=BYDATE[p.date]||[]).push(p)}
+    if(p.wk){(WEEKS[p.wk]=WEEKS[p.wk]||[]).push(p)}});
+  const WARMR={1:['2026-10-30','2026-11-05'],2:['2026-11-06','2026-11-12'],3:['2026-11-13','2026-11-19'],4:['2026-11-20','2026-11-30']};
+  function weekRange(w){ if(w<=4)return WARMR[w]; if(w===5)return['2026-12-01','2026-12-06']; const s=add('2026-12-07',7*(w-6)); return [s,add(s,6)] }
+  const WMAX=Math.max(...Object.keys(WEEKS).map(Number));
+  function weekOf(s){ for(let w=1;w<=WMAX;w++){const [a,b]=weekRange(w); if(s>=a&&s<=b)return w} return s<'2026-10-30'?1:WMAX }
+  const SCHED=PROBS.filter(p=>p.date).sort((a,b)=>a.date<b.date?-1:1);
+  const planBy=s=>SCHED.filter(p=>p.date<=s).length;
+
+  let days={}, pst={}, selected=today<LOG_START?LOG_START:today, col=null, pcol=null, canWrite=true, dirty=false, loaded=false;
+  let viewWeek=weekOf(today), filt='all', tfilt='all', tst={}, tcol=null;
+
+  const logged=s=>{const x=days[s];return !!x && (x.minutes||0)>=10};
+  const lvl=m=>m>=90?4:m>=60?3:m>=30?2:m>=10?1:0;
+  const stOf=id=>(pst[id]&&pst[id].status)||'';
+  function dueInfo(id){const x=pst[id]; if(!x||x.status!=='solved'||!x.solvedAt)return null;
+    const k=(x.revisits||[]).length; if(k>=3)return null; const d=add(x.solvedAt,OFFS[k]); return {k:k+1,date:d,due:d<=today}}
+
+  const chipBox=$('minChips');
+  MINS.forEach(m=>{const l=document.createElement('label');
+    l.innerHTML='<input type="radio" name="min" id="min'+m+'" value="'+m+'"><span>'+(m===120?'120+':m)+'</span>';chipBox.appendChild(l)});
+
+  function phaseOf(s){
+    if(s<'2026-10-30')return 'Warm-up starts tomorrow';
+    if(s<='2026-11-30')return 'Warm-up · Oct 30 – Nov 30';
+    if(s<='2027-01-31')return 'Rebuild foundations · Dec – Jan';
+    if(s<='2027-03-31')return 'Deepen · Feb – Mar';
+    if(s<='2027-05-31')return 'Peak and apply · Apr – May';
+    if(s<='2027-06-30')return 'Interviews and offers · Jun';
+    return 'Notice period · Jun – Sep';
+  }
+  function streaks(){
+    let cur=0, s=logged(today)?today:add(today,-1);
+    while(s>=LOG_START && logged(s)){cur++;s=add(s,-1)}
+    let best=0,run=0;
+    for(let d=LOG_START; d<=today; d=add(d,1)){ if(logged(d)){run++;best=Math.max(best,run)} else run=0 }
+    return {cur,best};
+  }
+
+  /* ---------- TODAY VIEW ---------- */
+  function renderStats(){
+    const {cur,best}=streaks();
+    $('sStreak').textContent=cur+(cur===1?' day':' days');
+    $('sBest').textContent='Best '+best+(best===1?' day':' days');
+    let prob=0,min=0,n=0;
+    Object.values(days).forEach(v=>{prob+=v.problems||0;min+=v.minutes||0;if((v.minutes||0)>=10)n++});
+    $('sProblems').textContent=prob;
+    const t=planBy(today);
+    $('sTarget').textContent='Plan has '+t+' scheduled by today';
+    $('sHours').textContent=(min/60).toFixed(min<600?1:0);
+    $('sDays').textContent=n+(n===1?' day':' days')+' shown up';
+    if(today<DSTART){$('sCount').textContent=diff(today,DSTART);$('sCountLbl').textContent='days until the plan starts Dec 1'}
+    else if(today<=OFFER){$('sCount').textContent=diff(today,OFFER);$('sCountLbl').textContent='days to the mid-June offer target'}
+    else {$('sCount').textContent=Math.max(0,diff(today,'2027-09-18'));$('sCountLbl').textContent='days to last working day'}
+    $('phase').textContent=phaseOf(today);
+    $('paceTxt').textContent=prob+' of '+t+' scheduled so far';
+
+    const b=$('banner'); b.className='banner'; const y=add(today,-1);
+    if(!loaded){b.textContent='Connecting to your log…';return}
+    if(logged(today)){b.classList.add('good');b.textContent=cur>1?'Logged today. '+cur+' days in a row. Write tomorrow’s first step before you close this.':'Logged today. That’s day one of the streak. Do 10 minutes tomorrow to make it two.'}
+    else if(today<'2026-10-30'){b.textContent='The warm-up starts tomorrow with Two Sum. Pick C# tonight and log today if you get a problem in.'}
+    else if(y>=LOG_START && !logged(y)){b.classList.add('warn');b.textContent='Yesterday was a miss. That’s fine once. Today is a 10-minute day so it doesn’t become two.'}
+    else {b.textContent=cur>0?'Streak at '+cur+'. Today isn’t logged yet. Even 10 minutes keeps it going.':'Today isn’t logged yet. Start with one easy problem or one revisit.'}
+  }
+
+  function renderUpnext(){
+    const box=$('upnext'); const list=BYDATE[selected]||[];
+    const due=PROBS.filter(p=>{const d=dueInfo(p.id);return d&&d.due}).length;
+    let h='';
+    if(list.length) h+='<span class="muted">On the plan '+(selected===today?'today':'this day')+':</span>'+list.map(p=>'<span><a href="https://leetcode.com/problems/'+p.id+'/" target="_blank" rel="noopener">'+esc(p.t)+'</a> <span class="muted">· '+STLBL[stOf(p.id)]+'</span></span>').join('');
+    else { const dw=parse(selected).getDay(); h+='<span class="muted">'+(dw===6&&selected>=DSTART?'Saturday is build day: work on the gateway.':dw===4&&selected<DSTART&&selected>='2026-10-30'?'No new problem today: re-solve one from the week from blank.':'No new problem on the plan this day. Do a revisit.')+'</span>'}
+    if(selected===today && due) h+='<span><a href="#plan">'+due+' revisit'+(due>1?'s':'')+' due</a></span>';
+    box.innerHTML=h;
+  }
+
+  function renderCal(){
+    const cal=$('cal'); cal.innerHTML='';
+    let d=CAL_START, c=1, lastMonth=-1;
+    while(d<END){
+      const lab=document.createElement('div'); lab.className='m'; lab.style.gridColumn=c;
+      let label='';
+      for(let i=0;i<7;i++){const di=parse(add(d,i));if(di.getMonth()!==lastMonth && di.getDate()<=7){label=MON[di.getMonth()];lastMonth=di.getMonth();break}}
+      lab.textContent=label; cal.appendChild(lab);
+      for(let i=0;i<7;i++){
+        const s=add(d,i); const btn=document.createElement('button'); btn.type='button'; btn.className='d';
+        btn.style.gridColumn=c; btn.style.gridRow=i+2;
+        const v=days[s]; const mins=v?v.minutes||0:0;
+        if(s<LOG_START){btn.classList.add('out');btn.disabled=true;btn.tabIndex=-1}
+        else if(s>today){btn.classList.add('future');btn.disabled=true;btn.tabIndex=-1}
+        else { const l=lvl(mins); if(l) btn.classList.add('lv'+l); btn.dataset.date=s }
+        if(MARKS[s]) btn.classList.add('mark');
+        if(s===today) btn.classList.add('today');
+        if(s===selected) btn.classList.add('sel');
+        btn.title=nice(s)+(MARKS[s]?' · '+MARKS[s]:'')+(s<=today&&s>=LOG_START?' · '+mins+' min'+(v&&v.problems?', '+v.problems+' problems':''):'');
+        btn.setAttribute('aria-label',btn.title);
+        cal.appendChild(btn);
+      }
+      d=add(d,7); c++;
+    }
+    const off=(parse(today).getDay()+6)%7; const mon=add(today,-off);
+    let wd=0,wm=0,wp=0;
+    for(let i=0;i<7;i++){const v=days[add(mon,i)];if(v){wm+=v.minutes||0;wp+=v.problems||0;if((v.minutes||0)>=10)wd++}}
+    $('wDays').textContent=wd+'/7';$('wMin').textContent=wm;$('wProb').textContent=wp;
+  }
+
+  function renderChart(){
+    const svg=$('chart'); const W=640,H=230,L=40,R=20,T=14,B=30;
+    const x0='2026-10-29', x1='2027-06-18', span=diff(x0,x1);
+    let cum=0; const pts=[];
+    for(let d=x0; d<=today && d<=x1; d=add(d,1)){cum+=(days[d]&&days[d].problems)||0;pts.push([d,cum])}
+    const total=SCHED.length;
+    const ymax=Math.max(Math.ceil((total+10)/40)*40,Math.ceil((cum+20)/40)*40);
+    const X=s=>L+(W-L-R)*diff(x0,s)/span, Y=v=>T+(H-T-B)*(1-v/ymax);
+    let g='';
+    for(let v=0;v<=ymax;v+=40){g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--line)" stroke-width="1"/>';
+      g+='<text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end">'+v+'</text>'}
+    ['2026-11-01','2026-12-01','2027-01-01','2027-02-01','2027-03-01','2027-04-01','2027-05-01','2027-06-01'].forEach(s=>{
+      g+='<text x="'+X(s)+'" y="'+(H-10)+'" text-anchor="middle">'+MON[parse(s).getMonth()]+'</text>'});
+    const tp=[]; for(let d=x0; d<=x1; d=add(d,7)) tp.push(X(d)+','+Y(planBy(d))); tp.push(X(x1)+','+Y(total));
+    g+='<polyline points="'+tp.join(' ')+'" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>';
+    g+='<text x="'+(X('2027-05-31')-4)+'" y="'+(Y(total)-8)+'" text-anchor="end">plan '+total+'</text>';
+    if(pts.length && cum>0){
+      const ap=pts.map(([d,v])=>X(d)+','+Y(v)).join(' ');
+      const area='M'+X(pts[0][0])+','+Y(0)+' L'+ap.replace(/ /g,' L')+' L'+X(pts.at(-1)[0])+','+Y(0)+' Z';
+      g+='<path d="'+area+'" fill="var(--accent)" fill-opacity="0.10"/>';
+      g+='<polyline points="'+ap+'" fill="none" stroke="var(--accent)" stroke-width="2.25" stroke-linejoin="round"/>';
+      const e=pts.at(-1); g+='<circle cx="'+X(e[0])+'" cy="'+Y(e[1])+'" r="4.5" fill="var(--accent)"/>';
+      g+='<text x="'+(X(e[0])+8)+'" y="'+(Y(e[1])-8)+'" style="fill:var(--ink);font-weight:500">you '+e[1]+'</text>';
+    } else g+='<text x="'+(L+8)+'" y="'+(Y(0)-10)+'" style="fill:var(--ink)">Your line starts with the first problem you log.</text>';
+    svg.innerHTML=g;
+  }
+
+  function renderWins(){
+    const list=Object.entries(days).filter(([k,v])=>v.win).sort((a,b)=>a[0]<b[0]?1:-1).slice(0,8);
+    const ul=$('wins'); ul.innerHTML='';
+    if(!list.length){ul.innerHTML='<li class="empty" style="display:block">Wins you write each day show up here. Re-read them on a bad day.</li>';return}
+    list.forEach(([k,v])=>{const li=document.createElement('li');
+      const a=document.createElement('span');a.className='mono';a.textContent=short(k);
+      const b=document.createElement('span');b.textContent=v.win; li.append(a,b); ul.appendChild(li)});
+  }
+
+  function fillForm(){
+    const v=days[selected]||{};
+    $('formTitle').textContent=selected===today?'Today':'Edit day';
+    $('formDate').textContent=nice(selected);
+    const m=v.minutes||0; const pick=MINS.reduce((p,c)=>c<=m?c:p,0);
+    document.querySelectorAll('input[name=min]').forEach(r=>r.checked=Number(r.value)===pick);
+    $('problems').value=v.problems||0; $('revisits').value=v.revisits||0;
+    ['solo','aloud','paper','side','build','logged'].forEach(k=>$(k).checked=!!v[k]);
+    $('win').value=v.win||''; $('next').value=v.next||'';
+    const prev=days[add(selected,-1)];
+    $('win').placeholder=prev&&prev.next?'Planned: '+prev.next:'Solved a medium without hints';
+    $('prevDay').disabled=selected<=LOG_START; $('nextDay').disabled=selected>=today;
+    dirty=false; $('saveMsg').textContent=v.minutes!=null?'Saved earlier':'Not logged yet';
+    renderUpnext();
+  }
+
+  /* ---------- PROBLEM ROWS ---------- */
+  function rowHTML(p,opts){
+    opts=opts||{};
+    const st=stOf(p.id); const di=dueInfo(p.id);
+    const co=p.co.length?p.co.slice(0,3).join(', ')+(p.n>3?' +'+(p.n-3):''):'';
+    let side='<a href="https://leetcode.com/problems/'+p.id+'/editorial/" target="_blank" rel="noopener">Editorial</a>';
+    if(opts.revisit && di) side='<button type="button" class="btn sm" data-rev="'+p.id+'">Revisit '+di.k+' done</button>';
+    let meta='<span class="pill '+p.d+'">'+({E:'Easy',M:'Medium',H:'Hard'})[p.d]+'</span>';
+    if(opts.topic) meta+='<span>'+esc(p.topic)+'</span>';
+    if(opts.date && p.date) meta+='<span class="mono">'+short(p.date)+'</span>';
+    if(p.role==='timed') meta+='<span class="tag">timed 35 min</span>';
+    if(p.bonus) meta+='<span class="tag">bonus</span>';
+    if(co) meta+='<span title="Reported at '+p.n+' of 30 tracked product companies">'+esc(co)+'</span>';
+    if(p.sn) meta+='<span class="tag" title="Reported at '+p.sn+' of 25 tracked service companies">'+esc(p.s.join(', ')+(p.sn>3?' +'+(p.sn-3):''))+'</span>';
+    if(di && opts.showDue!==false) meta+='<span class="'+(di.due?'due':'')+'">revisit '+di.k+(di.due?' due':' on '+short(di.date))+'</span>';
+    const sel='<select id="st-'+p.id+'" data-pid="'+p.id+'" class="s-'+(st||'todo')+'" aria-label="Status of '+esc(p.t)+'"'+(canWrite&&pcol?'':' disabled')+'>'+
+      Object.keys(STLBL).map(k=>'<option value="'+k+'"'+(k===st?' selected':'')+'>'+STLBL[k]+'</option>').join('')+'</select>';
+    return '<div class="prow">'+sel+'<div class="ptitle"><a href="https://leetcode.com/problems/'+p.id+'/" target="_blank" rel="noopener">'+esc(p.t)+'</a><div class="pmeta">'+meta+'</div></div><div class="pside">'+side+'</div></div>';
+  }
+
+  /* ---------- PLAN VIEW ---------- */
+  function renderPlan(){
+    const tl=BYDATE[today]||[];
+    $('todayLbl').textContent=nice(today<'2026-10-30'?'2026-10-30':today);
+    if(today<'2026-10-30'){ $('todayList').innerHTML=(BYDATE['2026-10-30']||[]).map(p=>rowHTML(p)).join('')+'<p class="empty">The warm-up starts tomorrow, Fri 30 Oct.</p>' }
+    else if(tl.length) $('todayList').innerHTML=tl.map(p=>rowHTML(p)).join('');
+    else { const nxt=SCHED.find(p=>p.date>today); const dw=parse(today).getDay();
+      $('todayList').innerHTML='<p class="empty">'+(dw===6&&today>=DSTART?'Saturday is build day. Work on the gateway; no new problem.':'No new problem today. Re-solve one from this week from blank.')+'</p>'+(nxt?'<p class="empty">Next up on '+nice(nxt.date)+': <a href="https://leetcode.com/problems/'+nxt.id+'/" target="_blank" rel="noopener">'+esc(nxt.t)+'</a></p>':'') }
+    const due=PROBS.filter(p=>{const d=dueInfo(p.id);return d&&d.due});
+    $('dueList').innerHTML=due.length?due.map(p=>rowHTML(p,{revisit:true,showDue:false})).join(''):'<p class="empty">Nothing due. Problems you mark solved come back here on day 3, 7 and 21.</p>';
+    const stuck=PROBS.filter(p=>stOf(p.id)==='stuck');
+    $('stuckList').innerHTML=stuck.length?stuck.map(p=>rowHTML(p)).join(''):'<p class="empty">None. When you need hints, mark it Stuck and re-solve it from blank the next day.</p>';
+    const b=$('dueBadge'); b.hidden=!due.length; b.textContent=due.length;
+
+    const w=viewWeek, [a,z]=weekRange(w); const ws=WEEKS[w]||[];
+    const topics=[...new Set(ws.map(p=>p.topic))];
+    const done=ws.filter(p=>stOf(p.id)).length;
+    $('wkTitle').innerHTML='Week '+w+' · '+short(a)+' – '+short(z)+'<small>'+esc(topics.join(' → '))+' · '+done+' of '+ws.length+' attempted</small>';
+    $('wkPrev').disabled=w<=1; $('wkNext').disabled=w>=WMAX;
+    let h='';
+    for(let d=a; d<=z; d=add(d,1)){
+      const list=BYDATE[d]||[]; const dw=parse(d).getDay(); const warm=w<=4;
+      let role;
+      if(list.length) role=list[0].role==='timed'?'Timed set · 35 min each, out loud':warm?'Warm-up problem':dw===5?'New problem + revisits':'New problem';
+      else role=warm?(dw===6?'Portfolio site':'Revisit or rest, 10 minutes counts'):(dw===6?'Build day · gateway':'Revisits');
+      h+='<div class="day'+(d===today?' is-today':'')+'"><div class="day-head"><b>'+nice(d)+(d===today?' · today':'')+'</b><span>'+role+'</span></div>'+
+        (list.length?'<div class="plist">'+list.map(p=>rowHTML(p)).join('')+'</div>':'<div class="note">'+(warm&&dw===6?'Ship a piece of your portfolio site.':!warm&&dw===6?'One finished slice of the LLM gateway.':'Re-solve a problem that’s due, from a blank file.')+'</div>')+'</div>';
+    }
+    $('wkDays').innerHTML=h;
+  }
+  $('wkPrev').onclick=()=>{if(viewWeek>1){viewWeek--;renderPlan()}};
+  $('wkNext').onclick=()=>{if(viewWeek<WMAX){viewWeek++;renderPlan()}};
+  $('wkNow').onclick=()=>{viewWeek=weekOf(today);renderPlan()};
+
+  /* ---------- TOPICS VIEW ---------- */
+  function renderTopics(){
+    const cards=$('topicCards'), secs=$('topicSecs'); let ch='', sh='';
+    const openIds=new Set([...secs.querySelectorAll('details[open]')].map(d=>d.id));
+    TOPIC_ORDER.forEach((t,i)=>{
+      const all=PROBS.filter(p=>p.topic===t); const anyt=!!SECNOTE[t]; const core=anyt?all:all.filter(p=>!p.bonus);
+      const solved=core.filter(p=>['solved','mastered'].includes(stOf(p.id))).length;
+      const stuck=core.filter(p=>stOf(p.id)==='stuck').length;
+      const first=core[0]&&core[0].date, last=core.at(-1)&&core.at(-1).date;
+      const when=anyt?'Anytime · not scheduled':first?short(first)+' – '+short(last):'';
+      ch+='<button type="button" class="tcard" data-open="t'+i+'"><div class="top"><b>'+esc(t)+'</b><small>'+solved+'/'+core.length+'</small></div>'+
+        '<div class="bar"><i class="b1" style="width:'+(100*solved/Math.max(1,core.length))+'%"></i><i class="b2" style="width:'+(100*stuck/Math.max(1,core.length))+'%"></i></div><small>'+when+'</small></button>';
+      const match=p=>filt==='all'||(filt==='todo'&&!stOf(p.id))||(filt==='done'&&['solved','mastered'].includes(stOf(p.id)))||(filt==='hot'&&p.n>=10)||(filt==='svc'&&p.sn>0);
+      const c2=core.filter(match), b2=anyt?[]:all.filter(p=>p.bonus).filter(match);
+      if(!c2.length && !b2.length) return;
+      sh+='<details class="tsec" id="t'+i+'"'+(openIds.has('t'+i)?' open':'')+'><summary><h3>'+esc(t)+'</h3><span class="muted mono" style="font-size:12.5px">'+solved+' of '+core.length+' solved'+(b2.length?' · '+b2.length+' bonus':'')+'</span></summary>'+
+        '<div class="plist">'+(anyt?'<p class="empty" style="margin:0 0 6px">'+SECNOTE[t]+'</p>':'')+c2.map(p=>rowHTML(p,{date:true})).join('')+(b2.length?'<div class="subhead">Bonus practice, not scheduled</div>'+b2.map(p=>rowHTML(p)).join(''):'')+'</div></details>';
+    });
+    cards.innerHTML=ch; secs.innerHTML=sh||'<p class="empty">No problems match this filter.</p>';
+  }
+  $('topicCards').addEventListener('click',e=>{const c=e.target.closest('[data-open]');if(!c)return;const d=$(c.dataset.open);if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'})}});
+  document.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{filt=b.dataset.f;
+    document.querySelectorAll('.filters button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderTopics()});
+
+  /* ---------- TECH VIEW ---------- */
+  const tsOf=id=>(tst[id]&&tst[id].status)||'';
+  function techRow(sec,q,showSec){
+    const st=tsOf(q.id);
+    const sel='<select data-tid="'+q.id+'" class="t-'+(st||'todo')+'" aria-label="How well you can answer: '+esc(q.q)+'"'+(canWrite&&tcol?'':' disabled')+'>'+
+      Object.keys(TLBL).map(k=>'<option value="'+k+'"'+(k===st?' selected':'')+'>'+TLBL[k]+'</option>').join('')+'</select>';
+    const doc=sec.docs[0];
+    return '<div class="prow">'+sel+'<div class="ptitle"><span class="tq">'+esc(q.q)+'</span><div class="pmeta"><span class="lvl">'+(q.l==='C'?'Core':'Deeper')+'</span>'+(showSec?'<span>'+esc(sec.name)+'</span>':'')+'</div></div><div class="pside">'+(doc?'<a href="'+doc.url+'" target="_blank" rel="noopener">Docs</a>':'')+'</div></div>';
+  }
+  function curMonth(){ if(today<DSTART)return 'Dec'; const m=MON[parse(today).getMonth()]; return MONTHS_ORDER.includes(m)?m:'May' }
+  function renderTech(){
+    const m=curMonth(); const focus=TECH.filter(s=>s.month===m);
+    $('tfTitle').textContent=(today<DSTART?'Up first in December':'This month’s focus')+': '+focus.map(s=>s.name).join(', ');
+    const fq=[]; focus.forEach(s=>s.qs.forEach(q=>fq.push([s,q])));
+    const left=fq.filter(([s,q])=>!['explain','confident'].includes(tsOf(q.id)));
+    $('tfSum').textContent=(fq.length-left.length)+' of '+fq.length+' ready';
+    $('tfList').innerHTML=left.slice(0,5).map(([s,q])=>techRow(s,q,true)).join('')||'<p class="empty">Everything for this month is at Can explain or better. Pull a Deeper question from next month.</p>';
+    const openIds=new Set([...$('techSecs').querySelectorAll('details[open]')].map(d=>d.id));
+    let ch='',sh='';
+    TECH.forEach(sec=>{
+      const n=sec.qs.length, conf=sec.qs.filter(q=>tsOf(q.id)==='confident').length, ex=sec.qs.filter(q=>tsOf(q.id)==='explain').length;
+      ch+='<button type="button" class="tcard" data-topen="x-'+sec.key+'"><div class="top"><b>'+esc(sec.name)+'</b><small>'+(conf+ex)+'/'+n+'</small></div>'+
+        '<div class="bar"><i class="b1" style="width:'+(100*conf/n)+'%"></i><i class="b2" style="width:'+(100*ex/n)+'%"></i></div><small>Focus: '+sec.month+(sec.month==='Dec'||sec.month==='Jan'?(sec.month==='Dec'?' 2026':' 2027'):' 2027')+'</small></button>';
+      const match=q=>tfilt==='all'||(tfilt==='todo'&&!tsOf(q.id))||(tfilt==='shaky'&&tsOf(q.id)==='shaky')||(tfilt==='core'&&q.l==='C');
+      const qs=sec.qs.filter(match); if(!qs.length)return;
+      const drillDone=!!(tst['drill-'+sec.key]&&tst['drill-'+sec.key].done);
+      sh+='<details class="tsec" id="x-'+sec.key+'"'+(openIds.has('x-'+sec.key)?' open':'')+'><summary><h3>'+esc(sec.name)+'</h3><span class="muted mono" style="font-size:12.5px">'+conf+' confident · '+ex+' can explain · '+n+' total</span></summary>'+
+        '<div class="tinfo"><div><b>Your angle</b><span>'+esc(sec.angle)+'</span>'+(sec.docs.length?'<span>'+sec.docs.map(d=>'<a href="'+d.url+'" target="_blank" rel="noopener">'+esc(d.label)+'</a>').join(' · ')+'</span>':'')+'</div>'+
+        '<div><b>Hands-on drill</b><span>'+esc(sec.drill)+'</span><label><input type="checkbox" data-drill="'+sec.key+'"'+(drillDone?' checked':'')+(canWrite&&tcol?'':' disabled')+'> Drill done</label></div></div>'+
+        '<div class="plist">'+qs.map(q=>techRow(sec,q,false)).join('')+'</div></details>';
+    });
+    $('techCards').innerHTML=ch; $('techSecs').innerHTML=sh||'<p class="empty">No questions match this filter.</p>';
+  }
+  $('techCards').addEventListener('click',e=>{const c=e.target.closest('[data-topen]');if(!c)return;const d=$(c.dataset.topen);if(d){d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'})}});
+  document.querySelectorAll('#techFilt button').forEach(b=>b.onclick=()=>{tfilt=b.dataset.tf;
+    document.querySelectorAll('#techFilt button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderTech()});
+
+  /* ---------- WEEK TIMETABLE ---------- */
+  const SLICE={Dec:'Gateway: one endpoint that forwards to one free LLM API and logs to Postgres',Jan:'Gateway: API keys per user, budget check, Redis rate limit',Feb:'Gateway: CTO dashboard with spend by user and team, deployed on Vercel',Mar:'Gateway: Playwright tests, README with architecture diagram, 2-minute demo video'};
+  const WGOALS={1:['Pick C# and stick to it','Create your problem log (pattern, insight, mistake)','Portfolio site: lock sections and design, deploy a blank shell to Vercel'],
+    2:['Re-solve week 1 problems from blank','Portfolio site: about, experience and Body Life Gym project, live'],
+    3:['Try your first medium','Portfolio site v1 linked on LinkedIn, Naukri and Wellfound','Write your first STAR story: a production issue you owned'],
+    4:['Two mediums this week','Write a one-page LLM gateway spec (v0 scope)','Block your daily time slot from Dec 1 and tell one person about the plan']};
+  let ttWeek=weekOf(today);
+  function dueOn(d){ return PROBS.filter(p=>{const x=dueInfo(p.id); if(!x)return false; return d===today?x.date<=today:x.date===d}) }
+  function techFor(w,i){ // i = weekday index 0..4
+    const [a]=weekRange(w); const m=a<DSTART?'Dec':MON[parse(a).getMonth()]; const mm=MONTHS_ORDER.includes(m)?m:'May';
+    const list=[]; TECH.filter(s=>s.month===mm).forEach(s=>s.qs.forEach(q=>list.push([s,q])));
+    const firstW=weekOf(SCHED.find(p=>MON[parse(p.date).getMonth()]===mm && p.date>=DSTART)?.date||a);
+    const k=((Math.max(0,w-firstW))*5+i)%Math.max(1,list.length); return list[k];
+  }
+  function pBlk(p){ const st=stOf(p.id);
+    return '<a class="pt" href="https://leetcode.com/problems/'+p.id+'/" target="_blank" rel="noopener">'+esc(p.t)+'</a><span class="sub"><span class="pill '+p.d+'">'+({E:'Easy',M:'Medium',H:'Hard'})[p.d]+'</span> '+esc(p.topic)+'</span>'+
+      '<select data-pid="'+p.id+'" class="s-'+(st||'todo')+'" aria-label="Status of '+esc(p.t)+'"'+(canWrite&&pcol?'':' disabled')+'>'+Object.keys(STLBL).map(k=>'<option value="'+k+'"'+(k===st?' selected':'')+'>'+STLBL[k]+'</option>').join('')+'</select>' }
+  function tBlk(sq){ if(!sq)return '<span class="sub">Pick any question from the Tech tab.</span>'; const [sec,q]=sq; const st=tsOf(q.id);
+    return '<span>'+esc(q.q)+'</span><span class="sub">'+esc(sec.name)+(sec.docs[0]?' · <a href="'+sec.docs[0].url+'" target="_blank" rel="noopener">Docs</a>':'')+'</span>'+
+      '<select data-tid="'+q.id+'" class="t-'+(st||'todo')+'" aria-label="How well you can answer: '+esc(q.q)+'"'+(canWrite&&tcol?'':' disabled')+'>'+Object.keys(TLBL).map(k=>'<option value="'+k+'"'+(k===st?' selected':'')+'>'+TLBL[k]+'</option>').join('')+'</select>' }
+  function blk(title,mins,body,main){ return '<div class="blk'+(main?' main':'')+'"><div class="bt"><span>'+title+'</span><span>'+mins+'</span></div>'+body+'</div>' }
+  function revBody(d,yesterdayP){ const due=dueOn(d);
+    if(due.length) return due.slice(0,2).map(p=>'<a class="pt" href="https://leetcode.com/problems/'+p.id+'/" target="_blank" rel="noopener">'+esc(p.t)+'</a><span class="sub">Revisit '+dueInfo(p.id).k+' from a blank file'+(d===today?' · <button type="button" class="btn sm" data-rev="'+p.id+'">Done</button>':'')+'</span>').join('')+(due.length>2?'<span class="sub">+'+(due.length-2)+' more in Plan</span>':'');
+    return yesterdayP?'<span>Re-solve <b>'+esc(yesterdayP.t)+'</b> from blank</span><span class="sub">No revisit due yet</span>':'<span class="sub">Re-solve any recent problem from blank</span>' }
+  function renderWeekTT(){
+    const w=ttWeek, [a,z]=weekRange(w); const warm=w<=4; const ws=WEEKS[w]||[];
+    const topics=[...new Set(ws.map(p=>p.topic))].filter(t=>t!=='Warm-up');
+    $('ttTitle').innerHTML='Week '+w+' · '+short(a)+' – '+short(z)+'<small>'+(warm?'Warm-up · 30–45 min a day':esc(topics.join(' → '))+' · about 75 min on weekdays')+'</small>';
+    $('ttPrev').disabled=w<=1; $('ttNext').disabled=w>=WMAX;
+    const done=ws.filter(p=>stOf(p.id)).length; let mins=0,dl=0; for(let d=a;d<=z;d=add(d,1)){const v=days[d];if(v){mins+=v.minutes||0;if((v.minutes||0)>=10)dl++}}
+    $('ttSum').innerHTML='<span><b>'+done+'/'+ws.length+'</b> problems attempted</span><span><b>'+dl+'</b> days logged</span><span><b>'+mins+'</b> minutes</span>';
+    const goals=warm?WGOALS[w]:[(topics.length?'Finish '+topics.join(' and ')+' problems on the plan':'Mixed timed sets'), (a<'2027-04-01'?(SLICE[MON[parse(a).getMonth()]]||'One finished gateway slice'):'Two mock interviews this week (Saturday and Sunday)'), 'Clear every revisit that comes due'];
+    $('ttGoals').innerHTML=goals.map(g=>'<li>'+esc(g)+'</li>').join('');
+    let h='', wi=0;
+    for(let d=a; d<=z; d=add(d,1)){
+      const dw=parse(d).getDay(); const list=BYDATE[d]||[]; const prevP=(()=>{for(let k=1;k<=3;k++){const l=BYDATE[add(d,-k)];if(l&&l.length)return l.at(-1)}return null})();
+      let label, blocks='', cls='';
+      if(warm){
+        if(list.length){ label='Warm-up problem · 30–45 min'; cls='two';
+          blocks=blk('Re-solve',  '10 min', revBody(d,prevP))+blk('New problem','25 min',pBlk(list[0]),true) }
+        else if(dw===6){ label='Portfolio day · 45 min'; cls='one'; blocks=blk('Portfolio site','45 min','<span>'+esc((WGOALS[w]||[]).filter(g=>/ortfolio/.test(g))[0]||'Ship one section of your portfolio site')+'</span>',true) }
+        else { label='Light day · 10–20 min'; cls='one'; blocks=blk('Revisit','10–20 min',revBody(d,prevP)) }
+      } else if(dw===6){
+        const m=MON[parse(d).getMonth()]; const mock=d>='2027-04-01';
+        label=mock?'Mock interview · 2 hrs':'Build day · 2 hrs'; cls='one';
+        blocks=blk(mock?'Mock interview':'Project build','2 hrs','<span>'+esc(mock?'One full mock: 1 DSA problem out loud + 15 min of Tech questions + 1 STAR story':(SLICE[m]||'One finished gateway slice'))+'</span><span class="sub">End by writing the first step for next Saturday.</span>',true);
+      } else if(dw===0){
+        label='Timed set + weekly review · 60 min'; cls='two';
+        blocks=blk('Timed set','35 min each, out loud',list.map(p=>pBlk(p)).join('<hr style="border:0;border-top:1px solid var(--line);margin:4px 0">')||'<span class="sub">Two unseen mediums</span>',true)+
+          blk('Weekly review','10 min','<span>Update the scoreboard, write 3 wins, plan next week.</span><span class="sub">Paste your week to Claude for the Sunday check-in.</span>');
+      } else {
+        const fri=dw===5; label=fri?'Problem + revisits · 75 min':'Daily session · 75 min';
+        blocks=blk('Warm-up','10 min',revBody(d,prevP))+
+          blk('New problem','45 min',list.length?pBlk(list[0]):'<span class="sub">No new problem</span>',true)+
+          blk('Talk-through','10 min','<span>Explain '+(list[0]?'<b>'+esc(list[0].t)+'</b>':'it')+' aloud like an interviewer is listening</span>'+(dw===4?'<span class="sub">Record it on your phone today.</span>':''))+
+          blk(fri?'Project / design':'Tech question','10 min',fri?'<span>Explain one project in 2 minutes, or one system design concept</span><span class="sub">See "Your projects, explained" in Tech.</span>':tBlk(techFor(w,wi)));
+        wi++;
+      }
+      h+='<div class="tt-day'+(d===today?' is-today':d<today?' past':'')+'"><div class="tt-head"><b>'+nice(d)+(d===today?' · today':'')+'</b><span>'+label+(days[d]&&(days[d].minutes||0)>=10?' · logged '+days[d].minutes+' min':'')+'</span></div><div class="tt-blocks '+cls+'">'+blocks+'</div></div>';
+    }
+    $('ttDays').innerHTML=h;
+  }
+  $('ttPrev').onclick=()=>{if(ttWeek>1){ttWeek--;renderWeekTT()}};
+  $('ttNext').onclick=()=>{if(ttWeek<WMAX){ttWeek++;renderWeekTT()}};
+  $('ttNow').onclick=()=>{ttWeek=weekOf(today);renderWeekTT()};
+
+  /* ---------- WRITES (one at a time) ---------- */
+  let q=Promise.resolve();
+  const enqueue=fn=>{q=q.then(fn).catch(e=>{ if(e&&e.code==='invalid_argument'){canWrite=false} flash('Couldn’t save just now. Try again in a moment.') });return q};
+  function flash(t){ $('saveMsg').textContent=t }
+  async function bumpDay(field){
+    const cur=days[today]||{}; const o=Object.assign({},cur); o[field]=(o[field]||0)+1; if(o.minutes==null)o.minutes=0;
+    await col.doc(today).set(o); days[today]=o;
+    if(selected===today && dirty){ $(field).value=(parseInt($(field).value,10)||0)+1 }
+  }
+  function setStatus(id,st){
+    if(!pcol||!canWrite)return;
+    enqueue(async()=>{
+      const prev=pst[id]||{}; const o=Object.assign({},prev,{status:st,updatedAt:new Date().toISOString()});
+      const first=!prev.status && st && !prev.firstAt;
+      if(first) o.firstAt=today;
+      if((st==='solved'||st==='mastered') && !prev.solvedAt) o.solvedAt=today;
+      if(!st){ delete o.solvedAt; o.revisits=[] }
+      await pcol.doc(id).set(o); pst[id]=o;
+      if(first) await bumpDay('problems');
+      renderAll(false);
+    });
+  }
+  function revisitDone(id){
+    if(!pcol||!canWrite)return;
+    enqueue(async()=>{
+      const prev=pst[id]||{}; const r=(prev.revisits||[]).concat(today);
+      const o=Object.assign({},prev,{revisits:r,updatedAt:new Date().toISOString()}); if(r.length>=3)o.status='mastered';
+      await pcol.doc(id).set(o); pst[id]=o; await bumpDay('revisits'); renderAll(false);
+    });
+  }
+  async function markSide(){
+    const cur=days[today]||{}; if(cur.side)return; const o=Object.assign({},cur,{side:true}); if(o.minutes==null)o.minutes=0;
+    await col.doc(today).set(o); days[today]=o; if(selected===today && dirty) $('side').checked=true;
+  }
+  function setTech(id,st){
+    if(!tcol||!canWrite)return;
+    enqueue(async()=>{ const o=Object.assign({},tst[id]||{},{status:st,updatedAt:new Date().toISOString()}); if(st&&!o.firstAt)o.firstAt=today;
+      await tcol.doc(id).set(o); tst[id]=o; if(st) await markSide(); renderAll(false) });
+  }
+  function setDrill(key,done){
+    if(!tcol||!canWrite)return;
+    enqueue(async()=>{ const o={done,doneAt:done?today:null,updatedAt:new Date().toISOString()}; await tcol.doc('drill-'+key).set(o); tst['drill-'+key]=o; if(done) await markSide(); renderAll(false) });
+  }
+  document.addEventListener('change',e=>{const s=e.target.closest('select[data-pid]');if(s)setStatus(s.dataset.pid,s.value);
+    const t=e.target.closest('select[data-tid]');if(t)setTech(t.dataset.tid,t.value);
+    const d=e.target.closest('input[data-drill]');if(d)setDrill(d.dataset.drill,d.checked)});
+  document.addEventListener('click',e=>{const b=e.target.closest('[data-rev]');if(b){b.disabled=true;revisitDone(b.dataset.rev)}});
+
+  function renderAll(refillForm){renderStats();renderCal();renderChart();renderWins();renderUpnext();renderPlan();renderTopics();renderTech();renderWeekTT();if(refillForm&&!dirty)fillForm()}
+
+  /* ---------- FORM ---------- */
+  function select(s){selected=s;fillForm();renderCal()}
+  $('cal').addEventListener('click',e=>{const d=e.target.closest('.d');if(d&&d.dataset.date)select(d.dataset.date)});
+  $('prevDay').onclick=()=>{if(selected>LOG_START)select(add(selected,-1))};
+  $('nextDay').onclick=()=>{if(selected<today)select(add(selected,1))};
+  document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{const i=$(b.dataset.step);
+    i.value=Math.max(0,Math.min(50,(parseInt(i.value,10)||0)+Number(b.dataset.d)));dirty=true;flash('Unsaved changes')});
+  $('form').addEventListener('input',()=>{dirty=true;flash('Unsaved changes')});
+  function readForm(){
+    const r=document.querySelector('input[name=min]:checked');
+    const o={minutes:r?Number(r.value):0,
+      problems:Math.max(0,parseInt($('problems').value,10)||0),
+      revisits:Math.max(0,parseInt($('revisits').value,10)||0),
+      win:$('win').value.trim(), next:$('next').value.trim(), savedAt:new Date().toISOString()};
+    ['solo','aloud','paper','side','build','logged'].forEach(k=>o[k]=$(k).checked);
+    return o;
+  }
+  function save(o){
+    if(!col){flash('Your log isn’t connected in this view, so this can’t be saved.');return}
+    if(!canWrite){flash('You can view this board but not change it.');return}
+    const day=selected; $('saveBtn').disabled=true; flash('Saving…');
+    enqueue(async()=>{ await col.doc(day).set(o); days[day]=o; dirty=false; flash('Saved '+nice(day)); renderAll(false) })
+      .finally(()=>{$('saveBtn').disabled=false});
+  }
+  $('form').addEventListener('submit',e=>{e.preventDefault();save(readForm())});
+  $('minBtn').onclick=()=>{const o=readForm(); if(o.minutes<10)o.minutes=10; if(!o.win)o.win='Showed up on a hard day';
+    document.querySelectorAll('input[name=min]').forEach(r=>r.checked=Number(r.value)===o.minutes); $('win').value=o.win; save(o)};
+
+  /* ---------- ROUTING ---------- */
+  function route(){
+    const v=(location.hash||'#week').slice(1); const view=['week','today','plan','topics','tech'].includes(v)?v:'week';
+    ['week','today','plan','topics','tech'].forEach(n=>{$('v-'+n).hidden=n!==view});
+    document.querySelectorAll('nav.tabs a').forEach(a=>{ if(a.dataset.view===view)a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current') });
+  }
+  window.addEventListener('hashchange',route); route();
+
+  renderAll(true);
+
+  (async()=>{
+    const db=await claude.use('db');
+    if(!db){loaded=true;$('banner').className='banner warn';$('banner').textContent='Your log can’t load in this view. Open the board on claude.ai while signed in.';return}
+    col=db.collection('days'); pcol=db.collection('problems'); tcol=db.collection('tech');
+    tcol.onSnapshot(snap=>{tst={};snap.docs.forEach(d=>{if(d.exists)tst[d.id]=d.data()});renderAll(false)},()=>{});
+    col.onSnapshot(snap=>{days={};snap.docs.forEach(d=>{if(d.exists)days[d.id]=d.data()});loaded=true;renderAll(true)},
+      ()=>{$('banner').className='banner warn';$('banner').textContent='Your log stopped syncing. Reload the page to reconnect.'});
+    pcol.onSnapshot(snap=>{pst={};snap.docs.forEach(d=>{if(d.exists)pst[d.id]=d.data()});renderAll(false)},()=>{});
+    try{const user=await claude.use('user'); if(user){const c=await user.can('data.write'); if(c===false){canWrite=false;$('saveBtn').disabled=true;$('minBtn').disabled=true;renderAll(false)}}}catch(e){}
+  })();
+})();
+</script>
+
+</body>
+</html>
